@@ -1,3 +1,7 @@
+## v1.0.2
+
+- Updated Stone SDK version (4.11.5);
+
 ## v1.0.1
 
 - Downgrade android minSDk to 22 (Stone requirement)

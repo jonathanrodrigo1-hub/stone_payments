@@ -189,14 +189,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                     
                     mifareUsecase!!.readMifareCard(block, timeout) { resp ->
                         when (resp) {
-                            is Result.Success<String> -> result.success(
-                                hashMapOf(
-                                    "success" to true,
-                                    "data" to resp.data,
-                                    "block" to block,
-                                    "message" to "Cartão Mifare lido com sucesso"
-                                )
-                            )
+                            is Result.Success<Map<String, Any>> -> result.success(resp.data)
                             else -> result.error("Error", resp.toString(), resp.toString())
                         }
                     }
@@ -212,13 +205,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                     
                     mifareUsecase!!.writeMifareCard(data, block, timeout) { resp ->
                         when (resp) {
-                            is Result.Success<Boolean> -> result.success(
-                                hashMapOf(
-                                    "success" to true,
-                                    "block" to block,
-                                    "message" to "Dados escritos com sucesso no bloco $block"
-                                )
-                            )
+                            is Result.Success<Map<String, Any>> -> result.success(resp.data)
                             else -> result.error("Error", resp.toString(), resp.toString())
                         }
                     }

@@ -15,6 +15,10 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import stone.database.transaction.TransactionObject
 import io.flutter.plugin.common.MethodChannel.Result as Res
 
+// ========== IMPORTS PARA DEVICE INFO ==========
+import stone.utils.Stone
+// ==============================================
+
 /** StonePaymentsPlugin */
 class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
     private lateinit var channel: MethodChannel
@@ -158,21 +162,6 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                     result.error("UNAVAILABLE", "Cannot cancel", e.toString())
                 }
             }
-            // "cancelPaymentWithATK" -> {
-            //     try {
-            //         paymentUsecase!!.doCancelWithITK(
-            //            call.argument("acquirerTransactionKey")!!,
-            //            call.argument("printReceipt"),
-            //        ) { resp ->
-            //             when (resp) {
-            //                 is Result.Success<*> -> result.success(resp.data.toString())
-            //                 else -> result.error("Error", resp.toString(), resp.toString())
-            //             }
-            //         }
-            //     } catch (e: Exception) {
-            //         result.error("UNAVAILABLE", "Cannot cancel", e.toString())
-            //     }
-            // }
             "cancelPaymentWithAuthorizationCode" -> {
                 try {
                     paymentUsecase!!.doCancelWithAuthorizationCode(
@@ -188,9 +177,114 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                     result.error("UNAVAILABLE", "Cannot cancel", e.toString())
                 }
             }
+            
+            // ========== DEVICE INFO (FUNCIONA) ==========
+            "getDeviceSerial" -> getDeviceSerial(result)
+            "getDeviceInfo" -> getDeviceInfo(result)
+            // ============================================
+            
+            // ========== MIFARE (TEMPORARIAMENTE DESABILITADO) ==========
+            "readMifareCard" -> {
+                result.error(
+                    "NOT_AVAILABLE",
+                    "A funcionalidade Mifare requer documentação adicional da Stone sobre a assinatura correta dos métodos. Entre em contato com o suporte Stone para mais informações sobre o PosMifareProvider.",
+                    "Documentação: https://sdkandroid.stone.com.br/reference/provider-de-mifare"
+                )
+            }
+            "writeMifareCard" -> {
+                result.error(
+                    "NOT_AVAILABLE",
+                    "A funcionalidade Mifare requer documentação adicional da Stone sobre a assinatura correta dos métodos. Entre em contato com o suporte Stone para mais informações sobre o PosMifareProvider.",
+                    "Documentação: https://sdkandroid.stone.com.br/reference/provider-de-mifare"
+                )
+            }
+            // ===========================================================
+            
             else -> {
                 result.notImplemented()
             }
+        }
+    }
+
+    // ============================================================
+    // MÉTODOS DEVICE INFO (FUNCIONAM)
+    // ============================================================
+    
+    /**
+     * Captura o número serial do dispositivo Stone
+     */
+    private fun getDeviceSerial(result: Res) {
+        try {
+            val pinpadList = Stone.getPinpadListSize()
+            
+            if (pinpadList > 0) {
+                val device = Stone.getPinpadFromListAt(0)
+                val deviceSerial = device?.serialNumber
+                
+                if (deviceSerial != null && deviceSerial.isNotEmpty()) {
+                    result.success(hashMapOf(
+                        "success" to true,
+                        "serial" to deviceSerial,
+                        "message" to "Serial capturado com sucesso"
+                    ))
+                } else {
+                    result.error(
+                        "SERIAL_EMPTY",
+                        "Serial do dispositivo está vazio",
+                        null
+                    )
+                }
+            } else {
+                result.error(
+                    "DEVICE_NOT_FOUND",
+                    "Nenhum dispositivo Stone conectado",
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            result.error("SERIAL_ERROR", "Erro ao capturar serial do dispositivo: ${e.message}", null)
+        }
+    }
+
+    /**
+     * Captura informações completas do dispositivo Stone
+     */
+    private fun getDeviceInfo(result: Res) {
+        try {
+            val pinpadList = Stone.getPinpadListSize()
+            
+            if (pinpadList > 0) {
+                val device = Stone.getPinpadFromListAt(0)
+                
+                if (device != null) {
+                    val deviceInfo = hashMapOf<String, Any?>(
+                        "serialNumber" to (device.serialNumber ?: ""),
+                        "name" to (device.name ?: ""),
+                        "manufacturer" to "Stone",
+                        "pinpadListSize" to pinpadList
+                    )
+                    
+                    result.success(hashMapOf(
+                        "success" to true,
+                        "deviceInfo" to deviceInfo,
+                        "message" to "Informações do dispositivo capturadas com sucesso"
+                    ))
+                } else {
+                    result.error(
+                        "DEVICE_NULL",
+                        "Dispositivo retornou null",
+                        null
+                    )
+                }
+            } else {
+                result.error(
+                    "DEVICE_NOT_FOUND",
+                    "Nenhum dispositivo Stone conectado",
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            result.error("DEVICE_INFO_ERROR", "Erro ao capturar informações do dispositivo: ${e.message}", null)
         }
     }
 

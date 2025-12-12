@@ -6,6 +6,7 @@ import androidx.annotation.NonNull
 import dev.ltag.stone_payments.usecases.ActivateUsecase
 import dev.ltag.stone_payments.usecases.PaymentUsecase
 import dev.ltag.stone_payments.usecases.PrinterUsecase
+import dev.ltag.stone_payments.usecases.MifareUsecase
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.BinaryMessenger
@@ -15,11 +16,9 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import stone.database.transaction.TransactionObject
 import io.flutter.plugin.common.MethodChannel.Result as Res
 
-// ========== IMPORTS CORRETOS PARA MIFARE E DEVICE INFO ==========
-import br.com.stone.posandroid.providers.PosMifareProvider
+// ========== IMPORTS PARA DEVICE INFO ==========
 import stone.utils.Stone
-import stone.application.interfaces.StoneCallbackInterface
-// ================================================================
+// ==============================================
 
 /** StonePaymentsPlugin */
 class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
@@ -28,6 +27,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
     var transactionObject = TransactionObject()
     var paymentUsecase: PaymentUsecase? = null
     var printerUsecase: PrinterUsecase? = null
+    var mifareUsecase: MifareUsecase? = null
 
     companion object {
         var flutterBinaryMessenger: BinaryMessenger? = null
@@ -41,6 +41,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
         // Inicialize as propriedades aqui
         paymentUsecase = PaymentUsecase(this)
         printerUsecase = PrinterUsecase(this)
+        mifareUsecase = MifareUsecase(this)
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Res) {
@@ -180,12 +181,56 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                 }
             }
             
-            // ========== NOVOS MÉTODOS - MIFARE E DEVICE INFO ==========
-            "readMifareCard" -> readMifareCard(call, result)
-            "writeMifareCard" -> writeMifareCard(call, result)
+            // ========== MIFARE METHODS ==========
+            "readMifareCard" -> {
+                try {
+                    val timeout = call.argument<Int>("timeout") ?: 30
+                    val block = call.argument<Int>("block") ?: 4
+                    
+                    mifareUsecase!!.readMifareCard(block, timeout) { resp ->
+                        when (resp) {
+                            is Result.Success<String> -> result.success(
+                                hashMapOf(
+                                    "success" to true,
+                                    "data" to resp.data,
+                                    "block" to block,
+                                    "message" to "Cartão Mifare lido com sucesso"
+                                )
+                            )
+                            else -> result.error("Error", resp.toString(), resp.toString())
+                        }
+                    }
+                } catch (e: Exception) {
+                    result.error("UNAVAILABLE", "Cannot read Mifare", e.toString())
+                }
+            }
+            "writeMifareCard" -> {
+                try {
+                    val data = call.argument<String>("data") ?: ""
+                    val block = call.argument<Int>("block") ?: 4
+                    val timeout = call.argument<Int>("timeout") ?: 30
+                    
+                    mifareUsecase!!.writeMifareCard(data, block, timeout) { resp ->
+                        when (resp) {
+                            is Result.Success<Boolean> -> result.success(
+                                hashMapOf(
+                                    "success" to true,
+                                    "block" to block,
+                                    "message" to "Dados escritos com sucesso no bloco $block"
+                                )
+                            )
+                            else -> result.error("Error", resp.toString(), resp.toString())
+                        }
+                    }
+                } catch (e: Exception) {
+                    result.error("UNAVAILABLE", "Cannot write Mifare", e.toString())
+                }
+            }
+            
+            // ========== DEVICE INFO ==========
             "getDeviceSerial" -> getDeviceSerial(result)
             "getDeviceInfo" -> getDeviceInfo(result)
-            // ===========================================================
+            // =================================
             
             else -> {
                 result.notImplemented()
@@ -194,162 +239,9 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
     }
 
     // ============================================================
-    // MÉTODOS MIFARE E DEVICE INFO
+    // MÉTODOS DEVICE INFO
     // ============================================================
     
-    /**
-     * Lê os dados de um cartão Mifare
-     * Baseado na documentação: https://sdkandroid.stone.com.br/v4.12.0/reference/provider-de-mifare
-     */
-    private fun readMifareCard(call: MethodCall, result: Res) {
-        try {
-            val timeout = call.argument<Int>("timeout") ?: 30
-            val block = call.argument<Int>("block") ?: 4
-            
-            val mifareProvider = PosMifareProvider(context)
-            
-            mifareProvider.connectionCallback = object : StoneCallbackInterface {
-                override fun onSuccess() {
-                    try {
-                        // Ativar o cartão
-                        mifareProvider.activateCard()
-                        
-                        // Autenticar o setor (bloco / 4)
-                        val sector = block / 4
-                        val authenticated = mifareProvider.authenticateSector(sector)
-                        
-                        if (authenticated) {
-                            // Ler o bloco
-                            val data = mifareProvider.readBlock(block)
-                            
-                            // Desligar o cartão
-                            mifareProvider.powerOff()
-                            
-                            val responseMap = hashMapOf<String, Any?>(
-                                "success" to true,
-                                "block" to block,
-                                "data" to (data ?: ""),
-                                "message" to "Cartão Mifare lido com sucesso"
-                            )
-                            
-                            result.success(responseMap)
-                        } else {
-                            mifareProvider.powerOff()
-                            result.error(
-                                "MIFARE_AUTH_ERROR",
-                                "Falha na autenticação do setor $sector",
-                                null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        try {
-                            mifareProvider.powerOff()
-                        } catch (ignored: Exception) {}
-                        result.error("MIFARE_READ_ERROR", "Erro ao processar cartão Mifare", e.message)
-                    }
-                }
-
-                override fun onError() {
-                    result.error(
-                        "MIFARE_CONNECTION_ERROR",
-                        "Erro ao detectar cartão Mifare. Aproxime o cartão do dispositivo.",
-                        null
-                    )
-                }
-            }
-            
-            mifareProvider.execute()
-            
-        } catch (e: Exception) {
-            result.error("MIFARE_READ_EXCEPTION", "Exceção ao ler cartão Mifare", e.message)
-        }
-    }
-
-    /**
-     * Escreve dados em um cartão Mifare
-     * Baseado na documentação: https://sdkandroid.stone.com.br/v4.12.0/reference/provider-de-mifare
-     */
-    private fun writeMifareCard(call: MethodCall, result: Res) {
-        try {
-            val data = call.argument<String>("data")
-            val block = call.argument<Int>("block") ?: 4
-            val timeout = call.argument<Int>("timeout") ?: 30
-            
-            if (data == null) {
-                result.error("INVALID_ARGUMENT", "Data cannot be null", null)
-                return
-            }
-            
-            // Validar tamanho dos dados (máximo 16 bytes)
-            if (data.length > 16) {
-                result.error("INVALID_DATA_SIZE", "Data must be 16 bytes or less", null)
-                return
-            }
-            
-            val mifareProvider = PosMifareProvider(context)
-            
-            mifareProvider.connectionCallback = object : StoneCallbackInterface {
-                override fun onSuccess() {
-                    try {
-                        // Ativar o cartão
-                        mifareProvider.activateCard()
-                        
-                        // Autenticar o setor (bloco / 4)
-                        val sector = block / 4
-                        val authenticated = mifareProvider.authenticateSector(sector)
-                        
-                        if (authenticated) {
-                            // Escrever no bloco
-                            val written = mifareProvider.writeBlock(block, data)
-                            
-                            // Desligar o cartão
-                            mifareProvider.powerOff()
-                            
-                            if (written) {
-                                result.success(hashMapOf(
-                                    "success" to true,
-                                    "block" to block,
-                                    "message" to "Dados escritos com sucesso no bloco $block"
-                                ))
-                            } else {
-                                result.error(
-                                    "MIFARE_WRITE_FAILED",
-                                    "Falha ao escrever no bloco $block",
-                                    null
-                                )
-                            }
-                        } else {
-                            mifareProvider.powerOff()
-                            result.error(
-                                "MIFARE_AUTH_ERROR",
-                                "Falha na autenticação do setor $sector",
-                                null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        try {
-                            mifareProvider.powerOff()
-                        } catch (ignored: Exception) {}
-                        result.error("MIFARE_WRITE_ERROR", "Erro ao escrever no cartão Mifare", e.message)
-                    }
-                }
-
-                override fun onError() {
-                    result.error(
-                        "MIFARE_CONNECTION_ERROR",
-                        "Erro ao detectar cartão Mifare. Aproxime o cartão do dispositivo.",
-                        null
-                    )
-                }
-            }
-            
-            mifareProvider.execute()
-            
-        } catch (e: Exception) {
-            result.error("MIFARE_WRITE_EXCEPTION", "Exceção ao escrever no cartão Mifare", e.message)
-        }
-    }
-
     /**
      * Captura o número serial do dispositivo Stone
      */

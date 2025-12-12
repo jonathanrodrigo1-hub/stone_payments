@@ -15,11 +15,11 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import stone.database.transaction.TransactionObject
 import io.flutter.plugin.common.MethodChannel.Result as Res
 
-// ========== IMPORTS PARA MIFARE E DEVICE INFO ==========
-import stone.providers.PosMifareProvider
+// ========== IMPORTS CORRETOS PARA MIFARE E DEVICE INFO ==========
+import br.com.stone.posandroid.providers.PosMifareProvider
 import stone.utils.Stone
-import stone.utils.StoneCallbackInterface
-// =======================================================
+import stone.application.interfaces.StoneCallbackInterface
+// ================================================================
 
 /** StonePaymentsPlugin */
 class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
@@ -208,7 +208,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
             
             val mifareProvider = PosMifareProvider(context)
             
-            mifareProvider.setConnectionCallback(object : StoneCallbackInterface {
+            mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
                         // Ativar o cartão
@@ -256,7 +256,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                         null
                     )
                 }
-            })
+            }
             
             mifareProvider.execute()
             
@@ -288,7 +288,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
             
             val mifareProvider = PosMifareProvider(context)
             
-            mifareProvider.setConnectionCallback(object : StoneCallbackInterface {
+            mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
                         // Ativar o cartão
@@ -341,7 +341,7 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                         null
                     )
                 }
-            })
+            }
             
             mifareProvider.execute()
             

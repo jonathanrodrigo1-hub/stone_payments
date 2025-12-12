@@ -15,10 +15,11 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import stone.database.transaction.TransactionObject
 import io.flutter.plugin.common.MethodChannel.Result as Res
 
-// ========== NOVOS IMPORTS PARA MIFARE E DEVICE INFO ==========
-import stone.providers.MifareProvider
+// ========== IMPORTS PARA MIFARE E DEVICE INFO ==========
+import stone.providers.PosMifareProvider
 import stone.utils.Stone
-// ==============================================================
+import stone.utils.StoneCallbackInterface
+// =======================================================
 
 /** StonePaymentsPlugin */
 class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
@@ -193,41 +194,65 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
     }
 
     // ============================================================
-    // NOVOS MÉTODOS IMPLEMENTADOS
+    // MÉTODOS MIFARE E DEVICE INFO
     // ============================================================
     
     /**
      * Lê os dados de um cartão Mifare
+     * Baseado na documentação: https://sdkandroid.stone.com.br/v4.12.0/reference/provider-de-mifare
      */
     private fun readMifareCard(call: MethodCall, result: Res) {
         try {
             val timeout = call.argument<Int>("timeout") ?: 30
+            val block = call.argument<Int>("block") ?: 4
             
-            val mifareProvider = MifareProvider(context, timeout)
+            val mifareProvider = PosMifareProvider(context)
             
-            mifareProvider.setConnectionCallback(object : stone.providers.BaseProviderCallback() {
+            mifareProvider.setConnectionCallback(object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
-                        val cardData = mifareProvider.mifareCardData
+                        // Ativar o cartão
+                        mifareProvider.activateCard()
                         
-                        val responseMap = hashMapOf<String, Any?>(
-                            "uid" to (cardData?.uid ?: ""),
-                            "type" to (cardData?.type ?: ""),
-                            "dataRead" to (cardData?.dataRead ?: ""),
-                            "success" to true
-                        )
+                        // Autenticar o setor (bloco / 4)
+                        val sector = block / 4
+                        val authenticated = mifareProvider.authenticateSector(sector)
                         
-                        result.success(responseMap)
+                        if (authenticated) {
+                            // Ler o bloco
+                            val data = mifareProvider.readBlock(block)
+                            
+                            // Desligar o cartão
+                            mifareProvider.powerOff()
+                            
+                            val responseMap = hashMapOf<String, Any?>(
+                                "success" to true,
+                                "block" to block,
+                                "data" to (data ?: ""),
+                                "message" to "Cartão Mifare lido com sucesso"
+                            )
+                            
+                            result.success(responseMap)
+                        } else {
+                            mifareProvider.powerOff()
+                            result.error(
+                                "MIFARE_AUTH_ERROR",
+                                "Falha na autenticação do setor $sector",
+                                null
+                            )
+                        }
                     } catch (e: Exception) {
-                        result.error("MIFARE_READ_ERROR", "Erro ao processar dados do cartão", e.message)
+                        try {
+                            mifareProvider.powerOff()
+                        } catch (ignored: Exception) {}
+                        result.error("MIFARE_READ_ERROR", "Erro ao processar cartão Mifare", e.message)
                     }
                 }
 
                 override fun onError() {
-                    val errorMessage = mifareProvider.theListOfErrors?.joinToString(", ") ?: "Erro desconhecido"
                     result.error(
-                        "MIFARE_READ_ERROR",
-                        "Erro ao ler cartão Mifare: $errorMessage",
+                        "MIFARE_CONNECTION_ERROR",
+                        "Erro ao detectar cartão Mifare. Aproxime o cartão do dispositivo.",
                         null
                     )
                 }
@@ -242,11 +267,12 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
 
     /**
      * Escreve dados em um cartão Mifare
+     * Baseado na documentação: https://sdkandroid.stone.com.br/v4.12.0/reference/provider-de-mifare
      */
     private fun writeMifareCard(call: MethodCall, result: Res) {
         try {
             val data = call.argument<String>("data")
-            val block = call.argument<Int>("block") ?: 0
+            val block = call.argument<Int>("block") ?: 4
             val timeout = call.argument<Int>("timeout") ?: 30
             
             if (data == null) {
@@ -254,24 +280,64 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                 return
             }
             
-            val mifareProvider = MifareProvider(context, timeout)
+            // Validar tamanho dos dados (máximo 16 bytes)
+            if (data.length > 16) {
+                result.error("INVALID_DATA_SIZE", "Data must be 16 bytes or less", null)
+                return
+            }
             
-            // Configura os dados para escrita
-            mifareProvider.setDataToWrite(data, block)
+            val mifareProvider = PosMifareProvider(context)
             
-            mifareProvider.setConnectionCallback(object : stone.providers.BaseProviderCallback() {
+            mifareProvider.setConnectionCallback(object : StoneCallbackInterface {
                 override fun onSuccess() {
-                    result.success(hashMapOf(
-                        "success" to true,
-                        "message" to "Dados escritos com sucesso no bloco $block"
-                    ))
+                    try {
+                        // Ativar o cartão
+                        mifareProvider.activateCard()
+                        
+                        // Autenticar o setor (bloco / 4)
+                        val sector = block / 4
+                        val authenticated = mifareProvider.authenticateSector(sector)
+                        
+                        if (authenticated) {
+                            // Escrever no bloco
+                            val written = mifareProvider.writeBlock(block, data)
+                            
+                            // Desligar o cartão
+                            mifareProvider.powerOff()
+                            
+                            if (written) {
+                                result.success(hashMapOf(
+                                    "success" to true,
+                                    "block" to block,
+                                    "message" to "Dados escritos com sucesso no bloco $block"
+                                ))
+                            } else {
+                                result.error(
+                                    "MIFARE_WRITE_FAILED",
+                                    "Falha ao escrever no bloco $block",
+                                    null
+                                )
+                            }
+                        } else {
+                            mifareProvider.powerOff()
+                            result.error(
+                                "MIFARE_AUTH_ERROR",
+                                "Falha na autenticação do setor $sector",
+                                null
+                            )
+                        }
+                    } catch (e: Exception) {
+                        try {
+                            mifareProvider.powerOff()
+                        } catch (ignored: Exception) {}
+                        result.error("MIFARE_WRITE_ERROR", "Erro ao escrever no cartão Mifare", e.message)
+                    }
                 }
 
                 override fun onError() {
-                    val errorMessage = mifareProvider.theListOfErrors?.joinToString(", ") ?: "Erro desconhecido"
                     result.error(
-                        "MIFARE_WRITE_ERROR",
-                        "Erro ao escrever no cartão Mifare: $errorMessage",
+                        "MIFARE_CONNECTION_ERROR",
+                        "Erro ao detectar cartão Mifare. Aproxime o cartão do dispositivo.",
                         null
                     )
                 }
@@ -289,47 +355,25 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
      */
     private fun getDeviceSerial(result: Res) {
         try {
-            val deviceSerial = Stone.getPinpadFromListAt(0)?.serialNumber
+            val pinpadList = Stone.getPinpadListSize()
             
-            if (deviceSerial != null && deviceSerial.isNotEmpty()) {
-                result.success(hashMapOf(
-                    "success" to true,
-                    "serial" to deviceSerial,
-                    "message" to "Serial capturado com sucesso"
-                ))
-            } else {
-                result.error(
-                    "DEVICE_NOT_FOUND",
-                    "Nenhum dispositivo Stone conectado ou serial não disponível",
-                    null
-                )
-            }
-        } catch (e: Exception) {
-            result.error("SERIAL_ERROR", "Erro ao capturar serial do dispositivo", e.message)
-        }
-    }
-
-    /**
-     * Captura informações completas do dispositivo Stone
-     */
-    private fun getDeviceInfo(result: Res) {
-        try {
-            val device = Stone.getPinpadFromListAt(0)
-            
-            if (device != null) {
-                val deviceInfo = hashMapOf<String, Any?>(
-                    "serialNumber" to (device.serialNumber ?: ""),
-                    "model" to (device.model ?: ""),
-                    "manufacturer" to (device.manufacturer ?: ""),
-                    "name" to (device.name ?: ""),
-                    "isConnected" to device.isConnected
-                )
+            if (pinpadList > 0) {
+                val device = Stone.getPinpadFromListAt(0)
+                val deviceSerial = device?.serialNumber
                 
-                result.success(hashMapOf(
-                    "success" to true,
-                    "deviceInfo" to deviceInfo,
-                    "message" to "Informações do dispositivo capturadas com sucesso"
-                ))
+                if (deviceSerial != null && deviceSerial.isNotEmpty()) {
+                    result.success(hashMapOf(
+                        "success" to true,
+                        "serial" to deviceSerial,
+                        "message" to "Serial capturado com sucesso"
+                    ))
+                } else {
+                    result.error(
+                        "SERIAL_EMPTY",
+                        "Serial do dispositivo está vazio",
+                        null
+                    )
+                }
             } else {
                 result.error(
                     "DEVICE_NOT_FOUND",
@@ -338,7 +382,49 @@ class StonePaymentsPlugin : FlutterPlugin, MethodCallHandler, Activity() {
                 )
             }
         } catch (e: Exception) {
-            result.error("DEVICE_INFO_ERROR", "Erro ao capturar informações do dispositivo", e.message)
+            result.error("SERIAL_ERROR", "Erro ao capturar serial do dispositivo: ${e.message}", null)
+        }
+    }
+
+    /**
+     * Captura informações completas do dispositivo Stone
+     */
+    private fun getDeviceInfo(result: Res) {
+        try {
+            val pinpadList = Stone.getPinpadListSize()
+            
+            if (pinpadList > 0) {
+                val device = Stone.getPinpadFromListAt(0)
+                
+                if (device != null) {
+                    val deviceInfo = hashMapOf<String, Any?>(
+                        "serialNumber" to (device.serialNumber ?: ""),
+                        "name" to (device.name ?: ""),
+                        "manufacturer" to "Stone",
+                        "pinpadListSize" to pinpadList
+                    )
+                    
+                    result.success(hashMapOf(
+                        "success" to true,
+                        "deviceInfo" to deviceInfo,
+                        "message" to "Informações do dispositivo capturadas com sucesso"
+                    ))
+                } else {
+                    result.error(
+                        "DEVICE_NULL",
+                        "Dispositivo retornou null",
+                        null
+                    )
+                }
+            } else {
+                result.error(
+                    "DEVICE_NOT_FOUND",
+                    "Nenhum dispositivo Stone conectado",
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            result.error("DEVICE_INFO_ERROR", "Erro ao capturar informações do dispositivo: ${e.message}", null)
         }
     }
 

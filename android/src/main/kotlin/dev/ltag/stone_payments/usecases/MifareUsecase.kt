@@ -18,7 +18,7 @@ class MifareUsecase(
     fun readMifareCard(
         block: Int,
         timeout: Int,
-        callback: (Result<String>) -> Unit
+        callback: (Result<Map<String, Any>>) -> Unit
     ) {
         try {
             val mifareProvider = PosMifareProvider(context)
@@ -29,17 +29,49 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Aqui você precisará testar a assinatura correta
-                        // A documentação não mostra os parâmetros exatos
-                        // Teste com o dispositivo físico para descobrir
+                        // Ler o bloco - teste a assinatura que funcionou
+                        // OPÇÃO 1: Se for só o número do bloco
+                        // val dataBytes = mifareProvider.readBlock(block)
+                        
+                        // OPÇÃO 2: Se precisar converter para Byte
+                        // val dataBytes = mifareProvider.readBlock(block.toByte())
+                        
+                        // TESTE ESTE:
+                        val blockByte = block.toByte()
+                        val dataBytes = mifareProvider.readBlock(blockByte)
 
-                        // EXEMPLO (pode precisar ajustar):
-                        // val data = mifareProvider.readBlock(block.toByte())
+                        // Converter ByteArray para String legível
+                        val dataString = if (dataBytes != null && dataBytes.isNotEmpty()) {
+                            // Tenta ler como texto UTF-8
+                            val textData = String(dataBytes, Charsets.UTF_8).trim()
+                            
+                            // Se tiver caracteres não imprimíveis, retorna como HEX
+                            if (textData.any { it < ' ' || it > '~' }) {
+                                dataBytes.joinToString("") { "%02X".format(it) }
+                            } else {
+                                textData
+                            }
+                        } else {
+                            ""
+                        }
+                        
+                        // Também retorna em HEX para debug
+                        val dataHex = dataBytes?.joinToString(" ") { "%02X".format(it) } ?: ""
 
                         mifareProvider.powerOff()
 
-                        Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido")
-                        callback(Result.Success("Dados lidos com sucesso"))
+                        Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido: $dataString")
+                        
+                        val resultMap = mapOf(
+                            "success" to true,
+                            "block" to block,
+                            "data" to dataString,
+                            "dataHex" to dataHex,
+                            "dataRaw" to (dataBytes?.toList() ?: emptyList<Byte>()),
+                            "message" to "Cartão Mifare lido com sucesso"
+                        )
+                        
+                        callback(Result.Success(resultMap))
 
                     } catch (e: Exception) {
                         try {
@@ -52,7 +84,7 @@ class MifareUsecase(
                 }
 
                 override fun onError() {
-                    val error = Exception("Erro ao detectar cartão Mifare")
+                    val error = Exception("Erro ao detectar cartão Mifare. Aproxime o cartão do leitor.")
                     Log.d("MIFARE_CONNECTION_ERROR", error.toString())
                     callback(Result.Error(error))
                 }
@@ -73,7 +105,7 @@ class MifareUsecase(
         data: String,
         block: Int,
         timeout: Int,
-        callback: (Result<Boolean>) -> Unit
+        callback: (Result<Map<String, Any>>) -> Unit
     ) {
         try {
             if (data.length > 16) {
@@ -89,7 +121,7 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Converter para ByteArray de 16 bytes
+                        // Converter String para ByteArray de 16 bytes
                         val dataBytes = ByteArray(16)
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(
@@ -100,14 +132,22 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // AQUI você precisará testar a assinatura correta
-                        // EXEMPLO (pode precisar ajustar):
-                        // mifareProvider.writeBlock(block.toByte(), dataBytes)
+                        // Escrever no bloco
+                        val blockByte = block.toByte()
+                        mifareProvider.writeBlock(blockByte, dataBytes)
 
                         mifareProvider.powerOff()
 
-                        Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito")
-                        callback(Result.Success(true))
+                        Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito: $data")
+                        
+                        val resultMap = mapOf(
+                            "success" to true,
+                            "block" to block,
+                            "dataWritten" to data,
+                            "message" to "Dados escritos com sucesso no bloco $block"
+                        )
+                        
+                        callback(Result.Success(resultMap))
 
                     } catch (e: Exception) {
                         try {
@@ -120,7 +160,7 @@ class MifareUsecase(
                 }
 
                 override fun onError() {
-                    val error = Exception("Erro ao detectar cartão Mifare")
+                    val error = Exception("Erro ao detectar cartão Mifare. Aproxime o cartão do leitor.")
                     Log.d("MIFARE_CONNECTION_ERROR", error.toString())
                     callback(Result.Error(error))
                 }

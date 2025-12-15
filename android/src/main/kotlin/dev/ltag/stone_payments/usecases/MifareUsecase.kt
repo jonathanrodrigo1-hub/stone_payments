@@ -38,6 +38,7 @@ class MifareUsecase(
 
                         // 2. Calcular o setor
                         val sector = block / 4
+                        val relativeBlock = block % 4  // Bloco relativo dentro do setor (0-3)
 
                         // 3. Autenticar o setor
                         try {
@@ -64,9 +65,18 @@ class MifareUsecase(
                             return
                         }
 
-                        // 4. Ler o bloco - passa apenas o bloco absoluto e o buffer
+                        // 4. Ler o bloco - tenta com bloco relativo
                         val readBuffer = ByteArray(16)
-                        mifareProvider.readBlock(block.toByte(), readBuffer)
+                        try {
+                            Log.d("MIFARE", "Tentando ler - Setor: $sector, Bloco relativo: $relativeBlock, Bloco absoluto: $block")
+                            mifareProvider.readBlock(relativeBlock.toByte(), readBuffer)
+                            Log.d("MIFARE", "Leitura OK com bloco relativo")
+                        } catch (e1: Exception) {
+                            Log.e("MIFARE", "Falha com bloco relativo, tentando bloco absoluto: ${e1.message}")
+                            mifareProvider.readBlock(block.toByte(), readBuffer)
+                            Log.d("MIFARE", "Leitura OK com bloco absoluto")
+                        }
+                        
                         Log.d("MIFARE", "Dados do bloco $block: ${byteArrayToHex(readBuffer)}")
 
                         // 5. Desligar o cartão
@@ -138,6 +148,7 @@ class MifareUsecase(
                         Log.d("MIFARE", "Cartão ativado")
 
                         val sector = block / 4
+                        val relativeBlock = block % 4
 
                         // Autenticar o setor
                         try {
@@ -168,9 +179,16 @@ class MifareUsecase(
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(sourceBytes, 0, dataBytes, 0, minOf(sourceBytes.size, 16))
 
-                        // Escrever o bloco - passa apenas o bloco absoluto e os dados
-                        mifareProvider.writeBlock(block.toByte(), dataBytes)
-                        Log.d("MIFARE", "Escrita bloco $block concluída")
+                        // Escrever o bloco - tenta com bloco relativo
+                        try {
+                            Log.d("MIFARE", "Tentando escrever - Setor: $sector, Bloco relativo: $relativeBlock, Bloco absoluto: $block")
+                            mifareProvider.writeBlock(relativeBlock.toByte(), dataBytes)
+                            Log.d("MIFARE", "Escrita OK com bloco relativo")
+                        } catch (e1: Exception) {
+                            Log.e("MIFARE", "Falha com bloco relativo, tentando bloco absoluto: ${e1.message}")
+                            mifareProvider.writeBlock(block.toByte(), dataBytes)
+                            Log.d("MIFARE", "Escrita OK com bloco absoluto")
+                        }
 
                         mifareProvider.powerOff()
 

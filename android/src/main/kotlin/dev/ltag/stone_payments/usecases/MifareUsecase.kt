@@ -32,29 +32,30 @@ class MifareUsecase(
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
-                        // 1. Ativar o cartão
-                        val cardInfo: ByteArray? = mifareProvider.activateCard()
-                        val cardInfoStr = cardInfo?.let { byteArrayToHex(it) } ?: "null"
-                        Log.d("MIFARE", "Cartão ativado: $cardInfoStr")
+                        // 1. Ativar o cartão (não retorna valor)
+                        mifareProvider.activateCard()
+                        Log.d("MIFARE", "Cartão ativado")
 
                         // 2. Calcular o setor baseado no bloco
                         val sector = block / 4
 
                         // 3. Autenticar o setor com Key A
-                        val authResult: Boolean = mifareProvider.authenticateSector(
-                            sector.toByte(),
-                            DEFAULT_KEY,
-                            MifareKeyType.TYPE_A
-                        )
-                        Log.d("MIFARE", "Autenticação setor $sector: $authResult")
-
-                        if (authResult == false) {
+                        // authenticateSector não retorna valor, lança exceção se falhar
+                        try {
+                            mifareProvider.authenticateSector(
+                                sector.toByte(),
+                                DEFAULT_KEY,
+                                MifareKeyType.KEYTYPE_A
+                            )
+                            Log.d("MIFARE", "Autenticação setor $sector OK")
+                        } catch (authEx: Exception) {
                             mifareProvider.powerOff()
+                            Log.e("MIFARE", "Falha autenticação: ${authEx.message}")
                             callback(Result.Error(Exception("Falha na autenticação do setor $sector")))
                             return
                         }
 
-                        // 4. Ler o bloco - readBlock(sector, block, data)
+                        // 4. Ler o bloco
                         val readBuffer = ByteArray(16)
                         mifareProvider.readBlock(sector.toByte(), block.toByte(), readBuffer)
                         Log.d("MIFARE", "Dados do bloco $block: ${byteArrayToHex(readBuffer)}")
@@ -130,23 +131,23 @@ class MifareUsecase(
                 override fun onSuccess() {
                     try {
                         // 1. Ativar o cartão
-                        val cardInfo: ByteArray? = mifareProvider.activateCard()
-                        val cardInfoStr = cardInfo?.let { byteArrayToHex(it) } ?: "null"
-                        Log.d("MIFARE", "Cartão ativado: $cardInfoStr")
+                        mifareProvider.activateCard()
+                        Log.d("MIFARE", "Cartão ativado")
 
                         // 2. Calcular o setor
                         val sector = block / 4
 
                         // 3. Autenticar o setor
-                        val authResult: Boolean = mifareProvider.authenticateSector(
-                            sector.toByte(),
-                            DEFAULT_KEY,
-                            MifareKeyType.TYPE_A
-                        )
-                        Log.d("MIFARE", "Autenticação setor $sector: $authResult")
-
-                        if (authResult == false) {
+                        try {
+                            mifareProvider.authenticateSector(
+                                sector.toByte(),
+                                DEFAULT_KEY,
+                                MifareKeyType.KEYTYPE_A
+                            )
+                            Log.d("MIFARE", "Autenticação setor $sector OK")
+                        } catch (authEx: Exception) {
                             mifareProvider.powerOff()
+                            Log.e("MIFARE", "Falha autenticação: ${authEx.message}")
                             callback(Result.Error(Exception("Falha na autenticação do setor $sector")))
                             return
                         }
@@ -156,7 +157,7 @@ class MifareUsecase(
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(sourceBytes, 0, dataBytes, 0, minOf(sourceBytes.size, 16))
 
-                        // 5. Escrever no bloco - writeBlock(sector, block, data)
+                        // 5. Escrever no bloco
                         mifareProvider.writeBlock(sector.toByte(), block.toByte(), dataBytes)
                         Log.d("MIFARE", "Escrita bloco $block concluída")
 
@@ -191,7 +192,7 @@ class MifareUsecase(
     }
 
     /**
-     * Lê o UID do cartão Mifare
+     * Lê o UID do cartão Mifare (apenas detecta o cartão)
      */
     fun readCardUID(callback: (Result<String>) -> Unit) {
         try {
@@ -200,16 +201,12 @@ class MifareUsecase(
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
-                        val cardUID: ByteArray? = mifareProvider.activateCard()
+                        mifareProvider.activateCard()
                         mifareProvider.powerOff()
-
-                        if (cardUID != null && cardUID.size > 0) {
-                            val uidHex = byteArrayToHex(cardUID)
-                            Log.d("MIFARE_UID", "UID: $uidHex")
-                            callback(Result.Success(uidHex))
-                        } else {
-                            callback(Result.Error(Exception("UID do cartão não disponível")))
-                        }
+                        
+                        // Se chegou aqui, o cartão foi detectado
+                        Log.d("MIFARE_UID", "Cartão detectado com sucesso")
+                        callback(Result.Success("CARD_DETECTED"))
 
                     } catch (e: Exception) {
                         try { mifareProvider.powerOff() } catch (ignored: Exception) {}

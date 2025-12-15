@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import dev.ltag.stone_payments.Result
 import br.com.stone.posandroid.providers.PosMifareProvider
+import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
 
@@ -30,10 +31,9 @@ class MifareUsecase(
                         mifareProvider.activateCard()
                         
                         // Calcular o setor baseado no bloco
-                        // Cada setor tem 4 blocos (0-3, 4-7, 8-11, etc)
-                        val sector = block / 4
+                        val sector = (block / 4).toByte()
                         
-                        // Autenticar o setor com a chave padrão (geralmente KEY_A com valor 0xFFFFFFFFFFFF)
+                        // Chave padrão Mifare (0xFFFFFFFFFFFF)
                         val defaultKey = byteArrayOf(
                             0xFF.toByte(), 
                             0xFF.toByte(), 
@@ -43,36 +43,56 @@ class MifareUsecase(
                             0xFF.toByte()
                         )
                         
-                        val authenticated = mifareProvider.authenticateSector(
-                            sector.toByte(),
-                            PosMifareProvider.KEY_A, // ou KEY_B dependendo da configuração
-                            defaultKey
+                        // Autenticar o setor com KEY_A
+                        mifareProvider.authenticateSector(
+                            sector,
+                            MifareKeyType.KEY_A,
+                            defaultKey[0],
+                            defaultKey[1],
+                            defaultKey[2],
+                            defaultKey[3],
+                            defaultKey[4],
+                            defaultKey[5]
                         )
-                        
-                        if (!authenticated) {
-                            mifareProvider.powerOff()
-                            callback(Result.Error(Exception("Falha na autenticação do setor $sector")))
-                            return
-                        }
 
-                        // Ler o bloco
-                        val data = mifareProvider.readBlock(block.toByte())
-                        
-                        // Desligar o cartão
-                        mifareProvider.powerOff()
-                        
-                        if (data != null && data.isNotEmpty()) {
-                            // Converter ByteArray para String hexadecimal ou UTF-8
-                            val dataString = data.joinToString("") { 
-                                String.format("%02X", it) 
+                        // Ler o bloco - a API retorna void e usa callbacks
+                        mifareProvider.readBlock(
+                            block.toByte(),
+                            object : PosMifareProvider.MifareReadCallback {
+                                override fun onSuccess(data: ByteArray?) {
+                                    try {
+                                        mifareProvider.powerOff()
+                                        
+                                        if (data != null && data.size > 0) {
+                                            // Converter ByteArray para String hexadecimal
+                                            val hexString = StringBuilder()
+                                            for (byte in data) {
+                                                hexString.append(String.format("%02X", byte))
+                                            }
+                                            
+                                            Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido: $hexString")
+                                            callback(Result.Success(hexString.toString()))
+                                        } else {
+                                            Log.d("MIFARE_READ_EMPTY", "Bloco $block retornou vazio")
+                                            callback(Result.Error(Exception("Dados vazios no bloco $block")))
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("MIFARE_READ_CALLBACK_ERROR", "Erro no callback", e)
+                                        callback(Result.Error(e))
+                                    }
+                                }
+
+                                override fun onError(message: String?) {
+                                    try {
+                                        mifareProvider.powerOff()
+                                    } catch (ignored: Exception) {
+                                    }
+                                    val error = Exception("Erro ao ler bloco: ${message ?: "desconhecido"}")
+                                    Log.e("MIFARE_READ_BLOCK_ERROR", error.toString())
+                                    callback(Result.Error(error))
+                                }
                             }
-                            
-                            Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido: $dataString")
-                            callback(Result.Success(dataString))
-                        } else {
-                            Log.d("MIFARE_READ_EMPTY", "Bloco $block retornou vazio")
-                            callback(Result.Error(Exception("Dados vazios no bloco $block")))
-                        }
+                        )
 
                     } catch (e: Exception) {
                         try {
@@ -118,10 +138,9 @@ class MifareUsecase(
                         mifareProvider.activateCard()
                         
                         // Calcular o setor baseado no bloco
-                        val sector = block / 4
+                        val sector = (block / 4).toByte()
                         
-                        // Verificar se não é um trailer block (blocos 3, 7, 11, 15, etc)
-                        // Trailer blocks contêm as chaves de acesso e não devem ser escritos normalmente
+                        // Verificar se não é um trailer block
                         if (block % 4 == 3) {
                             mifareProvider.powerOff()
                             callback(Result.Error(
@@ -130,7 +149,7 @@ class MifareUsecase(
                             return
                         }
                         
-                        // Autenticar o setor com a chave padrão
+                        // Chave padrão Mifare
                         val defaultKey = byteArrayOf(
                             0xFF.toByte(), 
                             0xFF.toByte(), 
@@ -140,17 +159,17 @@ class MifareUsecase(
                             0xFF.toByte()
                         )
                         
-                        val authenticated = mifareProvider.authenticateSector(
-                            sector.toByte(),
-                            PosMifareProvider.KEY_A,
-                            defaultKey
+                        // Autenticar o setor com KEY_A
+                        mifareProvider.authenticateSector(
+                            sector,
+                            MifareKeyType.KEY_A,
+                            defaultKey[0],
+                            defaultKey[1],
+                            defaultKey[2],
+                            defaultKey[3],
+                            defaultKey[4],
+                            defaultKey[5]
                         )
-                        
-                        if (!authenticated) {
-                            mifareProvider.powerOff()
-                            callback(Result.Error(Exception("Falha na autenticação do setor $sector")))
-                            return
-                        }
 
                         // Preparar dados para escrita (16 bytes)
                         val dataBytes = ByteArray(16)
@@ -159,11 +178,11 @@ class MifareUsecase(
                         if (data.matches(Regex("^[0-9A-Fa-f]+$")) && data.length <= 32) {
                             // Converter hex string para bytes
                             val hexData = if (data.length % 2 != 0) "0$data" else data
-                            for (i in hexData.indices step 2) {
+                            var i = 0
+                            while (i < hexData.length && i / 2 < 16) {
                                 val index = i / 2
-                                if (index < 16) {
-                                    dataBytes[index] = hexData.substring(i, i + 2).toInt(16).toByte()
-                                }
+                                dataBytes[index] = hexData.substring(i, i + 2).toInt(16).toByte()
+                                i += 2
                             }
                         } else {
                             // Tratar como texto UTF-8
@@ -185,19 +204,20 @@ class MifareUsecase(
                             )
                         }
 
-                        // Escrever no bloco
-                        val writeSuccess = mifareProvider.writeBlock(block.toByte(), dataBytes)
+                        // Escrever no bloco - writeBlock provavelmente recebe os 16 bytes separados
+                        mifareProvider.writeBlock(
+                            block.toByte(),
+                            dataBytes[0], dataBytes[1], dataBytes[2], dataBytes[3],
+                            dataBytes[4], dataBytes[5], dataBytes[6], dataBytes[7],
+                            dataBytes[8], dataBytes[9], dataBytes[10], dataBytes[11],
+                            dataBytes[12], dataBytes[13], dataBytes[14], dataBytes[15]
+                        )
                         
                         // Desligar o cartão
                         mifareProvider.powerOff()
                         
-                        if (writeSuccess) {
-                            Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito com sucesso")
-                            callback(Result.Success(true))
-                        } else {
-                            Log.e("MIFARE_WRITE_FAILED", "Falha ao escrever no bloco $block")
-                            callback(Result.Error(Exception("Falha ao escrever no bloco $block")))
-                        }
+                        Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito com sucesso")
+                        callback(Result.Success(true))
 
                     } catch (e: Exception) {
                         try {

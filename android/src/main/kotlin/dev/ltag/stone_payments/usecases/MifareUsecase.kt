@@ -7,6 +7,7 @@ import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
 import stone.application.StoneStart
+import stone.providers.LoadTablesProviderV3
 
 class MifareUsecase(
     private val stonePayments: StonePaymentsPlugin,
@@ -29,10 +30,7 @@ class MifareUsecase(
     ) {
         try {
             // IMPORTANTE: Inicializar Stone antes de usar providers
-            if (!isStoneInitialized()) {
-                Log.d("MIFARE", "Inicializando Stone SDK...")
-                StoneStart.init(context)
-            }
+            initializeStoneIfNeeded()
 
             val mifareProvider = PosMifareProvider(context)
 
@@ -77,6 +75,8 @@ class MifareUsecase(
                         // 4. Ler o bloco usando bloco relativo (0-3)
                         val readBuffer = ByteArray(16)
                         Log.d("MIFARE", "Tentando ler bloco relativo: $relativeBlock")
+                        
+                        // Assinatura correta: readBlock(block: Byte, data: ByteArray)
                         mifareProvider.readBlock(relativeBlock.toByte(), readBuffer)
                         Log.d("MIFARE", "Leitura OK! Dados: ${byteArrayToHex(readBuffer)}")
 
@@ -141,10 +141,7 @@ class MifareUsecase(
             }
 
             // IMPORTANTE: Inicializar Stone antes de usar providers
-            if (!isStoneInitialized()) {
-                Log.d("MIFARE", "Inicializando Stone SDK...")
-                StoneStart.init(context)
-            }
+            initializeStoneIfNeeded()
 
             val mifareProvider = PosMifareProvider(context)
 
@@ -190,6 +187,8 @@ class MifareUsecase(
 
                         // Escrever usando bloco relativo
                         Log.d("MIFARE", "Tentando escrever bloco relativo: $relativeBlock")
+                        
+                        // Assinatura correta: writeBlock(block: Byte, data: ByteArray)
                         mifareProvider.writeBlock(relativeBlock.toByte(), dataBytes)
                         Log.d("MIFARE", "Escrita OK!")
 
@@ -226,10 +225,7 @@ class MifareUsecase(
     fun readCardUID(callback: (Result<String>) -> Unit) {
         try {
             // IMPORTANTE: Inicializar Stone antes de usar providers
-            if (!isStoneInitialized()) {
-                Log.d("MIFARE", "Inicializando Stone SDK...")
-                StoneStart.init(context)
-            }
+            initializeStoneIfNeeded()
 
             val mifareProvider = PosMifareProvider(context)
 
@@ -258,13 +254,14 @@ class MifareUsecase(
         }
     }
 
-    private fun isStoneInitialized(): Boolean {
-        return try {
-            // Tenta verificar se o Koin está inicializado
-            stone.di.SdkKoinStarter.isStarted()
-            true
+    private fun initializeStoneIfNeeded() {
+        try {
+            // Tenta verificar se já está inicializado tentando carregar as tabelas
+            LoadTablesProviderV3.isInitialized()
         } catch (e: Exception) {
-            false
+            Log.d("MIFARE", "Inicializando Stone SDK...")
+            // Inicializa com lista vazia de stone codes (não precisa para Mifare)
+            StoneStart.init(context, emptyList())
         }
     }
 

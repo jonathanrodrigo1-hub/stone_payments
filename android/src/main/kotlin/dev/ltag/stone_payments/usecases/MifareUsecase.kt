@@ -6,6 +6,9 @@ import br.com.stone.posandroid.providers.PosMifareProvider
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
 
+// Adicione esta importação
+import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
+
 class MifareUsecase(
     private val stonePayments: StonePaymentsPlugin,
 ) {
@@ -38,13 +41,26 @@ class MifareUsecase(
                         // 2. Calcular o setor
                         val sector = block / 4
 
-                        // 3. Autenticar o setor (Key A = 0x60)
+                        // 3. Autenticar o setor usando reflexão para obter KEY_A
                         try {
-  mifareProvider.authenticateSector(
-    sector.toByte(),
-    DEFAULT_KEY,
-    0x60  // Remova o .toByte() - use Int diretamente
-)
+                            // Tentar obter o valor do enum dinamicamente
+                            val keyType = try {
+                                // Tenta acessar MifareKeyType.KEY_A ou MifareKeyType.A
+                                MifareKeyType.valueOf("KEY_A")
+                            } catch (e: Exception) {
+                                try {
+                                    MifareKeyType.valueOf("A")
+                                } catch (e2: Exception) {
+                                    // Se nenhum funcionar, tenta pegar o primeiro valor do enum
+                                    MifareKeyType.values()[0]
+                                }
+                            }
+                            
+                            mifareProvider.authenticateSector(
+                                sector.toByte(),
+                                DEFAULT_KEY,
+                                keyType
+                            )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
                             Log.e("MIFARE", "Falha autenticação: ${authEx.message}")
@@ -128,13 +144,23 @@ class MifareUsecase(
 
                         val sector = block / 4
 
-                        // Autenticar o setor (Key A = 0x60)
+                        // Autenticar o setor
                         try {
-mifareProvider.authenticateSector(
-    sector.toByte(),
-    DEFAULT_KEY,
-    0x60  // Remova o .toByte() - use Int diretamente
-)
+                            val keyType = try {
+                                MifareKeyType.valueOf("KEY_A")
+                            } catch (e: Exception) {
+                                try {
+                                    MifareKeyType.valueOf("A")
+                                } catch (e2: Exception) {
+                                    MifareKeyType.values()[0]
+                                }
+                            }
+                            
+                            mifareProvider.authenticateSector(
+                                sector.toByte(),
+                                DEFAULT_KEY,
+                                keyType
+                            )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
                             Log.e("MIFARE", "Falha autenticação: ${authEx.message}")

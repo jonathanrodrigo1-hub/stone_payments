@@ -3,11 +3,9 @@ package dev.ltag.stone_payments.usecases
 import android.util.Log
 import dev.ltag.stone_payments.Result
 import br.com.stone.posandroid.providers.PosMifareProvider
+import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
-
-// Adicione esta importação
-import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 
 class MifareUsecase(
     private val stonePayments: StonePaymentsPlugin,
@@ -41,25 +39,23 @@ class MifareUsecase(
                         // 2. Calcular o setor
                         val sector = block / 4
 
-                        // 3. Autenticar o setor usando reflexão para obter KEY_A
+                        // 3. Autenticar o setor - ORDEM CORRETA DOS PARÂMETROS
                         try {
-                            // Tentar obter o valor do enum dinamicamente
                             val keyType = try {
-                                // Tenta acessar MifareKeyType.KEY_A ou MifareKeyType.A
                                 MifareKeyType.valueOf("KEY_A")
                             } catch (e: Exception) {
                                 try {
                                     MifareKeyType.valueOf("A")
                                 } catch (e2: Exception) {
-                                    // Se nenhum funcionar, tenta pegar o primeiro valor do enum
                                     MifareKeyType.values()[0]
                                 }
                             }
                             
+                            // ORDEM CORRETA: keyType, sector, key
                             mifareProvider.authenticateSector(
+                                keyType,
                                 sector.toByte(),
-                                DEFAULT_KEY,
-                                keyType
+                                DEFAULT_KEY
                             )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
@@ -144,7 +140,7 @@ class MifareUsecase(
 
                         val sector = block / 4
 
-                        // Autenticar o setor
+                        // Autenticar o setor - ORDEM CORRETA DOS PARÂMETROS
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -156,10 +152,11 @@ class MifareUsecase(
                                 }
                             }
                             
+                            // ORDEM CORRETA: keyType, sector, key
                             mifareProvider.authenticateSector(
+                                keyType,
                                 sector.toByte(),
-                                DEFAULT_KEY,
-                                keyType
+                                DEFAULT_KEY
                             )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {

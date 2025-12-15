@@ -32,9 +32,8 @@ class MifareUsecase(
                         // Criar buffer para receber os dados (16 bytes para Mifare Classic)
                         val dataBytes = ByteArray(16)
                         
-                        // Ler o bloco - readBlock(byte block, byte[] data)
-                        // O método preenche o array dataBytes com os dados lidos
-                        mifareProvider.readBlock(block.toByte(), dataBytes)
+                        // Tentar com a ordem invertida: readBlock(data, block)
+                        mifareProvider.readBlock(dataBytes, block.toByte())
 
                         // Converter para String
                         val dataString = String(dataBytes, Charsets.UTF_8).trim()
@@ -119,8 +118,8 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // Escrever no bloco - writeBlock(byte block, byte[] data)
-                        mifareProvider.writeBlock(block.toByte(), dataBytes)
+                        // Tentar com a ordem invertida: writeBlock(data, block)
+                        mifareProvider.writeBlock(dataBytes, block.toByte())
 
                         mifareProvider.powerOff()
 

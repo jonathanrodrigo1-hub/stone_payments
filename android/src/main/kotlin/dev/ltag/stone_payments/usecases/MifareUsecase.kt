@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import dev.ltag.stone_payments.Result
 import br.com.stone.posandroid.providers.PosMifareProvider
+import stone.application.enums.Action
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
 
@@ -26,34 +27,68 @@ class MifareUsecase(
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
+                        Log.d("MIFARE", "Cartão detectado, iniciando leitura do bloco $block")
+                        
                         // Ativar o cartão
                         mifareProvider.activateCard()
+                        Log.d("MIFARE", "Cartão ativado")
 
-                        // Aqui você precisará testar a assinatura correta
-                        // A documentação não mostra os parâmetros exatos
-                        // Teste com o dispositivo físico para descobrir
+                        // Autenticar setor antes de ler
+                        val sector = block / 4
+                        val keyA = byteArrayOf(
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                        )
+                        
+                        mifareProvider.authenticateSector(sector, keyA, Action.KEY_A)
+                        Log.d("MIFARE", "Setor $sector autenticado")
 
-                        // EXEMPLO (pode precisar ajustar):
-                        // val data = mifareProvider.readBlock(block.toByte())
+                        // LER O BLOCO - AQUI ESTÁ O CÓDIGO QUE ESTAVA FALTANDO!
+                        val data = mifareProvider.readBlock(block)
+                        Log.d("MIFARE", "Dados lidos do bloco $block")
 
+                        // Converter para String Hexadecimal e UTF-8
+                        val dataHex = data.joinToString("") { byte -> "%02X".format(byte) }
+                        val dataString = try {
+                            String(data, Charsets.UTF_8).trim().replace("\u0000", "")
+                        } catch (e: Exception) {
+                            ""
+                        }
+
+                        Log.d("MIFARE_DATA_HEX", dataHex)
+                        Log.d("MIFARE_DATA_STRING", dataString)
+
+                        // Desenergisar o cartão
                         mifareProvider.powerOff()
+                        Log.d("MIFARE", "Cartão desenergizado")
 
-                        Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido")
-                        callback(Result.Success("Dados lidos com sucesso"))
+                        // Retornar dados em formato JSON
+                        val jsonResult = """
+                            {
+                                "success": true,
+                                "block": $block,
+                                "dataHex": "$dataHex",
+                                "dataString": "$dataString",
+                                "dataBytes": [${data.joinToString(",")}],
+                                "message": "Bloco $block lido com sucesso"
+                            }
+                        """.trimIndent()
+
+                        callback(Result.Success(jsonResult))
 
                     } catch (e: Exception) {
                         try {
                             mifareProvider.powerOff()
                         } catch (ignored: Exception) {
                         }
-                        Log.d("MIFARE_READ_ERROR", e.toString())
+                        Log.e("MIFARE_READ_ERROR", "Erro ao ler bloco: ${e.message}", e)
                         callback(Result.Error(e))
                     }
                 }
 
                 override fun onError() {
                     val error = Exception("Erro ao detectar cartão Mifare")
-                    Log.d("MIFARE_CONNECTION_ERROR", error.toString())
+                    Log.e("MIFARE_CONNECTION_ERROR", error.toString())
                     callback(Result.Error(error))
                 }
             }
@@ -61,7 +96,7 @@ class MifareUsecase(
             mifareProvider.execute()
 
         } catch (e: Exception) {
-            Log.d("MIFARE_EXCEPTION", e.toString())
+            Log.e("MIFARE_EXCEPTION", "Erro geral: ${e.message}", e)
             callback(Result.Error(e))
         }
     }
@@ -86,8 +121,21 @@ class MifareUsecase(
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
+                        Log.d("MIFARE", "Cartão detectado, iniciando escrita no bloco $block")
+                        
                         // Ativar o cartão
                         mifareProvider.activateCard()
+                        Log.d("MIFARE", "Cartão ativado")
+
+                        // Autenticar setor antes de escrever
+                        val sector = block / 4
+                        val keyA = byteArrayOf(
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                        )
+                        
+                        mifareProvider.authenticateSector(sector, keyA, Action.KEY_A)
+                        Log.d("MIFARE", "Setor $sector autenticado")
 
                         // Converter para ByteArray de 16 bytes
                         val dataBytes = ByteArray(16)
@@ -100,13 +148,14 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // AQUI você precisará testar a assinatura correta
-                        // EXEMPLO (pode precisar ajustar):
-                        // mifareProvider.writeBlock(block.toByte(), dataBytes)
+                        // ESCREVER NO BLOCO
+                        mifareProvider.writeBlock(block, dataBytes)
+                        Log.d("MIFARE", "Dados escritos no bloco $block")
 
+                        // Desenergisar o cartão
                         mifareProvider.powerOff()
+                        Log.d("MIFARE", "Cartão desenergizado")
 
-                        Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito")
                         callback(Result.Success(true))
 
                     } catch (e: Exception) {
@@ -114,14 +163,14 @@ class MifareUsecase(
                             mifareProvider.powerOff()
                         } catch (ignored: Exception) {
                         }
-                        Log.d("MIFARE_WRITE_ERROR", e.toString())
+                        Log.e("MIFARE_WRITE_ERROR", "Erro ao escrever: ${e.message}", e)
                         callback(Result.Error(e))
                     }
                 }
 
                 override fun onError() {
                     val error = Exception("Erro ao detectar cartão Mifare")
-                    Log.d("MIFARE_CONNECTION_ERROR", error.toString())
+                    Log.e("MIFARE_CONNECTION_ERROR", error.toString())
                     callback(Result.Error(error))
                 }
             }
@@ -129,7 +178,7 @@ class MifareUsecase(
             mifareProvider.execute()
 
         } catch (e: Exception) {
-            Log.d("MIFARE_EXCEPTION", e.toString())
+            Log.e("MIFARE_EXCEPTION", "Erro geral: ${e.message}", e)
             callback(Result.Error(e))
         }
     }

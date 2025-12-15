@@ -29,7 +29,7 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Tentar ler o bloco diretamente (retorna ByteArray)
+                        // Ler o bloco - readBlock retorna ByteArray
                         val dataBytes: ByteArray = mifareProvider.readBlock(block)
 
                         // Converter para String
@@ -115,7 +115,7 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // Escrever no bloco
+                        // Escrever no bloco - writeBlock(int block, byte[] data)
                         mifareProvider.writeBlock(block, dataBytes)
 
                         mifareProvider.powerOff()

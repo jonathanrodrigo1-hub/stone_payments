@@ -32,18 +32,11 @@ class MifareUsecase(
                         // Criar buffer para receber os dados (16 bytes para Mifare Classic)
                         val dataBytes = ByteArray(16)
                         
-                        // Possível assinatura: readBlock(byte, byte[], byte[])
-                        // Onde o terceiro parâmetro pode ser a chave de autenticação
-                        val keyBytes = ByteArray(6) // Chave padrão Mifare
+                        // readBlock(byte block, byte keyType, byte[] data)
+                        // keyType: 0x60 = Key A, 0x61 = Key B
+                        val keyType: Byte = 0x60 // Key A
                         
-                        try {
-                            // Tentar com 3 parâmetros
-                            mifareProvider.readBlock(block.toByte(), dataBytes, keyBytes)
-                        } catch (e: Exception) {
-                            Log.e("MIFARE_READ_TRY", "Tentativa com 3 params falhou, tentando alternativa", e)
-                            // Se falhar, tentar sem o terceiro parâmetro
-                            throw e
-                        }
+                        mifareProvider.readBlock(block.toByte(), keyType, dataBytes)
 
                         // Converter para String
                         val dataString = String(dataBytes, Charsets.UTF_8).trim()
@@ -128,16 +121,10 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // Chave padrão Mifare
-                        val keyBytes = ByteArray(6)
+                        // writeBlock(byte block, byte keyType, byte[] data)
+                        val keyType: Byte = 0x60 // Key A
                         
-                        try {
-                            // Tentar com 3 parâmetros
-                            mifareProvider.writeBlock(block.toByte(), dataBytes, keyBytes)
-                        } catch (e: Exception) {
-                            Log.e("MIFARE_WRITE_TRY", "Tentativa com 3 params falhou", e)
-                            throw e
-                        }
+                        mifareProvider.writeBlock(block.toByte(), keyType, dataBytes)
 
                         mifareProvider.powerOff()
 

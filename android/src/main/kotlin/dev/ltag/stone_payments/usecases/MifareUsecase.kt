@@ -40,25 +40,67 @@ class MifareUsecase(
                         val sector = block / 4
                         Log.d("MIFARE_SECTOR", "Bloco $block está no setor $sector")
                         
-                        // Chave padrão Mifare (FFFFFFFFFFFF)
-                        val defaultKey = byteArrayOf(
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                        // Lista de chaves para tentar
+                        val keysToTry = listOf(
+                            // Chave padrão de fábrica
+                            byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 
+                                       0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()),
+                            // Chave alternativa (todos zeros)
+                            byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00, 0x00),
+                            // Chave MAD (Mifare Application Directory)
+                            byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 
+                                       0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte()),
+                            // Outra chave comum
+                            byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 
+                                       0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
                         )
                         
-                        Log.d("MIFARE_AUTH", "Autenticando setor $sector...")
+                        var authenticated = false
+                        var usedKey = ""
+                        var usedKeyType = ""
                         
-                        // Autenticar o setor
-                        try {
-                            mifareProvider.authenticateSector(
-                                MifareKeyType.TypeA,
-                                defaultKey,
-                                sector.toByte()
-                            )
-                            Log.d("MIFARE_AUTH", "Autenticação bem-sucedida")
-                        } catch (authEx: Exception) {
-                            Log.e("MIFARE_AUTH_ERROR", "Erro na autenticação", authEx)
-                            throw Exception("Falha na autenticação do setor $sector. Verifique se a chave está correta. Erro: ${authEx.message}")
+                        // Tentar Key A com todas as chaves
+                        for ((index, key) in keysToTry.withIndex()) {
+                            try {
+                                Log.d("MIFARE_AUTH_TRY", "Tentando Key A com chave $index...")
+                                mifareProvider.authenticateSector(
+                                    MifareKeyType.TypeA,
+                                    key,
+                                    sector.toByte()
+                                )
+                                authenticated = true
+                                usedKey = "Chave $index"
+                                usedKeyType = "Key A"
+                                Log.d("MIFARE_AUTH", "Autenticação bem-sucedida com Key A, chave $index")
+                                break
+                            } catch (e: Exception) {
+                                Log.w("MIFARE_AUTH_FAIL", "Key A chave $index falhou: ${e.message}")
+                            }
+                        }
+                        
+                        // Se Key A falhou, tentar Key B
+                        if (!authenticated) {
+                            for ((index, key) in keysToTry.withIndex()) {
+                                try {
+                                    Log.d("MIFARE_AUTH_TRY", "Tentando Key B com chave $index...")
+                                    mifareProvider.authenticateSector(
+                                        MifareKeyType.TypeB,
+                                        key,
+                                        sector.toByte()
+                                    )
+                                    authenticated = true
+                                    usedKey = "Chave $index"
+                                    usedKeyType = "Key B"
+                                    Log.d("MIFARE_AUTH", "Autenticação bem-sucedida com Key B, chave $index")
+                                    break
+                                } catch (e: Exception) {
+                                    Log.w("MIFARE_AUTH_FAIL", "Key B chave $index falhou: ${e.message}")
+                                }
+                            }
+                        }
+                        
+                        if (!authenticated) {
+                            throw Exception("Não foi possível autenticar o setor $sector. Nenhuma das chaves conhecidas funcionou.")
                         }
 
                         // Criar buffer para receber os dados
@@ -67,7 +109,7 @@ class MifareUsecase(
                         Log.d("MIFARE_READ", "Lendo bloco $block...")
                         
                         // Ler o bloco
-                        val keyType: Byte = 0x60 // Key A
+                        val keyType: Byte = if (usedKeyType == "Key A") 0x60 else 0x61
                         
                         try {
                             mifareProvider.readBlock(block.toByte(), keyType, dataBytes)
@@ -75,11 +117,6 @@ class MifareUsecase(
                         } catch (readEx: Exception) {
                             Log.e("MIFARE_READ_ERROR", "Erro ao ler bloco", readEx)
                             throw Exception("Erro ao ler bloco $block: ${readEx.message ?: "Erro desconhecido"}")
-                        }
-                        
-                        // Verificar se os dados foram lidos
-                        if (dataBytes.all { it == 0.toByte() }) {
-                            Log.w("MIFARE_EMPTY", "Bloco retornou vazio (todos zeros)")
                         }
                         
                         // Converter para String
@@ -103,8 +140,8 @@ class MifareUsecase(
                             "sector" to sector,
                             "data" to dataString,
                             "dataHex" to hexString.toString().trim(),
-                            "dataBytes" to dataBytes.size,
-                            "message" to "Cartão Mifare lido com sucesso"
+                            "authMethod" to "$usedKeyType - $usedKey",
+                            "message" to "Cartão Mifare lido com sucesso usando $usedKeyType"
                         )
                         
                         callback(Result.Success(resultMap))
@@ -118,7 +155,6 @@ class MifareUsecase(
                         
                         val errorMsg = e.message ?: "Erro desconhecido ao ler cartão Mifare"
                         Log.e("MIFARE_READ_ERROR", errorMsg, e)
-                        Log.e("MIFARE_READ_ERROR_TYPE", "Exception type: ${e.javaClass.simpleName}")
                         
                         callback(Result.Error(Exception(errorMsg)))
                     }
@@ -185,24 +221,63 @@ class MifareUsecase(
                         val sector = block / 4
                         Log.d("MIFARE_SECTOR", "Bloco $block está no setor $sector")
                         
-                        // Chave padrão
-                        val defaultKey = byteArrayOf(
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                        // Lista de chaves para tentar
+                        val keysToTry = listOf(
+                            byteArrayOf(0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(), 
+                                       0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()),
+                            byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00, 0x00),
+                            byteArrayOf(0xA0.toByte(), 0xA1.toByte(), 0xA2.toByte(), 
+                                       0xA3.toByte(), 0xA4.toByte(), 0xA5.toByte()),
+                            byteArrayOf(0xD3.toByte(), 0xF7.toByte(), 0xD3.toByte(), 
+                                       0xF7.toByte(), 0xD3.toByte(), 0xF7.toByte())
                         )
                         
-                        Log.d("MIFARE_AUTH", "Autenticando setor $sector...")
+                        var authenticated = false
+                        var usedKey = ""
+                        var usedKeyType = ""
                         
-                        try {
-                            mifareProvider.authenticateSector(
-                                MifareKeyType.TypeA,
-                                defaultKey,
-                                sector.toByte()
-                            )
-                            Log.d("MIFARE_AUTH", "Autenticação bem-sucedida")
-                        } catch (authEx: Exception) {
-                            Log.e("MIFARE_AUTH_ERROR", "Erro na autenticação", authEx)
-                            throw Exception("Falha na autenticação do setor $sector: ${authEx.message}")
+                        // Tentar Key A
+                        for ((index, key) in keysToTry.withIndex()) {
+                            try {
+                                Log.d("MIFARE_AUTH_TRY", "Tentando Key A com chave $index...")
+                                mifareProvider.authenticateSector(
+                                    MifareKeyType.TypeA,
+                                    key,
+                                    sector.toByte()
+                                )
+                                authenticated = true
+                                usedKey = "Chave $index"
+                                usedKeyType = "Key A"
+                                Log.d("MIFARE_AUTH", "Autenticação bem-sucedida com Key A, chave $index")
+                                break
+                            } catch (e: Exception) {
+                                Log.w("MIFARE_AUTH_FAIL", "Key A chave $index falhou")
+                            }
+                        }
+                        
+                        // Tentar Key B se Key A falhou
+                        if (!authenticated) {
+                            for ((index, key) in keysToTry.withIndex()) {
+                                try {
+                                    Log.d("MIFARE_AUTH_TRY", "Tentando Key B com chave $index...")
+                                    mifareProvider.authenticateSector(
+                                        MifareKeyType.TypeB,
+                                        key,
+                                        sector.toByte()
+                                    )
+                                    authenticated = true
+                                    usedKey = "Chave $index"
+                                    usedKeyType = "Key B"
+                                    Log.d("MIFARE_AUTH", "Autenticação bem-sucedida com Key B, chave $index")
+                                    break
+                                } catch (e: Exception) {
+                                    Log.w("MIFARE_AUTH_FAIL", "Key B chave $index falhou")
+                                }
+                            }
+                        }
+                        
+                        if (!authenticated) {
+                            throw Exception("Não foi possível autenticar o setor $sector para escrita.")
                         }
 
                         // Converter String para ByteArray de 16 bytes
@@ -215,10 +290,8 @@ class MifareUsecase(
                             0,
                             minOf(sourceBytes.size, 16)
                         )
-                        
-                        Log.d("MIFARE_WRITE_DATA", "Dados preparados: ${dataBytes.size} bytes")
 
-                        val keyType: Byte = 0x60
+                        val keyType: Byte = if (usedKeyType == "Key A") 0x60 else 0x61
                         
                         Log.d("MIFARE_WRITE", "Escrevendo no bloco $block...")
                         
@@ -240,8 +313,8 @@ class MifareUsecase(
                             "block" to block,
                             "sector" to sector,
                             "dataWritten" to data,
-                            "bytesWritten" to dataBytes.size,
-                            "message" to "Dados escritos com sucesso no bloco $block"
+                            "authMethod" to "$usedKeyType - $usedKey",
+                            "message" to "Dados escritos com sucesso usando $usedKeyType"
                         )
                         
                         callback(Result.Success(resultMap))

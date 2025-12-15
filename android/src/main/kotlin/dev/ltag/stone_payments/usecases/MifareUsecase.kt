@@ -29,25 +29,18 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // TODO: TESTE ESTAS OPÇÕES E VEJA QUAL FUNCIONA:
-                        
-                        // OPÇÃO 1: Só o bloco
-                        // val dataBytes = mifareProvider.readBlock(block)
-                        
-                        // OPÇÃO 2: Bloco como Byte
-                        // val dataBytes = mifareProvider.readBlock(block.toByte())
-                        
-                        // OPÇÃO 3: Com buffer de saída
+                        // Criar buffer de saída (16 bytes para Mifare Classic)
                         val buffer = ByteArray(16)
+                        
+                        // Ler o bloco: readBlock(bloco, buffer_destino)
                         mifareProvider.readBlock(block.toByte(), buffer)
-                        val dataBytes = buffer
 
                         // Converter para String
-                        val dataString = String(dataBytes, Charsets.UTF_8).trim()
+                        val dataString = String(buffer, Charsets.UTF_8).trim()
                         
                         // Converter para HEX
                         val hexString = StringBuilder()
-                        for (b in dataBytes) {
+                        for (b in buffer) {
                             hexString.append(String.format("%02X ", b))
                         }
 
@@ -125,12 +118,7 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // TODO: TESTE ESTAS OPÇÕES E VEJA QUAL FUNCIONA:
-                        
-                        // OPÇÃO 1: Bloco e dados
-                        // mifareProvider.writeBlock(block, dataBytes)
-                        
-                        // OPÇÃO 2: Bloco como Byte
+                        // Escrever no bloco: writeBlock(bloco, dados)
                         mifareProvider.writeBlock(block.toByte(), dataBytes)
 
                         mifareProvider.powerOff()

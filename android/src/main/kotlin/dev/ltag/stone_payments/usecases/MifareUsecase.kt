@@ -40,11 +40,11 @@ class MifareUsecase(
 
                         // 3. Autenticar o setor (Key A = 0x60)
                         try {
-                            mifareProvider.authenticateSector(
-                                sector.toByte(),
-                                DEFAULT_KEY,
-                                0x60.toByte()  // 0x60 = Key A, 0x61 = Key B
-                            )
+  mifareProvider.authenticateSector(
+    sector.toByte(),
+    DEFAULT_KEY,
+    0x60  // Remova o .toByte() - use Int diretamente
+)
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
                             Log.e("MIFARE", "Falha autenticação: ${authEx.message}")
@@ -130,11 +130,11 @@ class MifareUsecase(
 
                         // Autenticar o setor (Key A = 0x60)
                         try {
-                            mifareProvider.authenticateSector(
-                                sector.toByte(),
-                                DEFAULT_KEY,
-                                0x60.toByte()
-                            )
+mifareProvider.authenticateSector(
+    sector.toByte(),
+    DEFAULT_KEY,
+    0x60  // Remova o .toByte() - use Int diretamente
+)
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
                             Log.e("MIFARE", "Falha autenticação: ${authEx.message}")

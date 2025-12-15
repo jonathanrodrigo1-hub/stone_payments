@@ -29,18 +29,15 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Criar buffer de saída (16 bytes para Mifare Classic)
-                        val buffer = ByteArray(16)
-                        
-                        // Ler o bloco: readBlock(bloco, buffer_destino)
-                        mifareProvider.readBlock(block.toByte(), buffer)
+                        // Tentar ler o bloco diretamente (retorna ByteArray)
+                        val dataBytes: ByteArray = mifareProvider.readBlock(block)
 
                         // Converter para String
-                        val dataString = String(buffer, Charsets.UTF_8).trim()
+                        val dataString = String(dataBytes, Charsets.UTF_8).trim()
                         
                         // Converter para HEX
                         val hexString = StringBuilder()
-                        for (b in buffer) {
+                        for (b in dataBytes) {
                             hexString.append(String.format("%02X ", b))
                         }
 
@@ -118,8 +115,8 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // Escrever no bloco: writeBlock(bloco, dados)
-                        mifareProvider.writeBlock(block.toByte(), dataBytes)
+                        // Escrever no bloco
+                        mifareProvider.writeBlock(block, dataBytes)
 
                         mifareProvider.powerOff()
 

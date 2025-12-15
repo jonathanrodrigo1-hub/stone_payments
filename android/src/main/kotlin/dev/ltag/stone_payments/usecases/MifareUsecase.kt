@@ -1,9 +1,9 @@
 package dev.ltag.stone_payments.usecases
 
-import android.content.Context
 import android.util.Log
 import dev.ltag.stone_payments.Result
 import br.com.stone.posandroid.providers.PosMifareProvider
+import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
 
@@ -20,9 +20,6 @@ class MifareUsecase(
 
     /**
      * Lê dados de um cartão Mifare
-     * @param block Número do bloco a ser lido (0-63 para Mifare 1K)
-     * @param timeout Timeout em segundos
-     * @param keyType Tipo da chave: 0 = Key A, 1 = Key B
      */
     fun readMifareCard(
         block: Int,
@@ -36,53 +33,50 @@ class MifareUsecase(
                 override fun onSuccess() {
                     try {
                         // 1. Ativar o cartão
-                        val cardInfo = mifareProvider.activateCard()
-                        Log.d("MIFARE", "Cartão ativado: ${cardInfo?.contentToString()}")
+                        val cardInfo: ByteArray? = mifareProvider.activateCard()
+                        val cardInfoStr = cardInfo?.let { byteArrayToHex(it) } ?: "null"
+                        Log.d("MIFARE", "Cartão ativado: $cardInfoStr")
 
                         // 2. Calcular o setor baseado no bloco
-                        // Mifare 1K: blocos 0-63, 4 blocos por setor = 16 setores
                         val sector = block / 4
 
-                        // 3. Autenticar o setor com Key A (tipo 0)
-                        val authResult = mifareProvider.authenticateSector(
+                        // 3. Autenticar o setor com Key A
+                        val authResult: Boolean = mifareProvider.authenticateSector(
                             sector.toByte(),
                             DEFAULT_KEY,
-                            0.toByte() // 0 = Key A, 1 = Key B
+                            MifareKeyType.TYPE_A
                         )
                         Log.d("MIFARE", "Autenticação setor $sector: $authResult")
 
-                        if (!authResult) {
+                        if (authResult == false) {
                             mifareProvider.powerOff()
                             callback(Result.Error(Exception("Falha na autenticação do setor $sector")))
                             return
                         }
 
-                        // 4. Ler o bloco
-                        val blockData = mifareProvider.readBlock(block.toByte())
-                        Log.d("MIFARE", "Dados do bloco $block: ${blockData?.contentToString()}")
+                        // 4. Ler o bloco - readBlock(sector, block, data)
+                        val readBuffer = ByteArray(16)
+                        mifareProvider.readBlock(sector.toByte(), block.toByte(), readBuffer)
+                        Log.d("MIFARE", "Dados do bloco $block: ${byteArrayToHex(readBuffer)}")
 
                         // 5. Desligar o cartão
                         mifareProvider.powerOff()
 
-                        if (blockData != null && blockData.isNotEmpty()) {
-                            // Converter para String hexadecimal para visualização
-                            val hexString = blockData.joinToString("") { "%02X".format(it) }
-                            
-                            // Tentar converter para texto (se for texto legível)
-                            val textString = try {
-                                String(blockData, Charsets.UTF_8).trim { it <= ' ' || it == '\u0000' }
-                            } catch (e: Exception) {
-                                ""
-                            }
-
-                            Log.d("MIFARE_READ_SUCCESS", "Bloco $block - Hex: $hexString, Text: $textString")
-                            
-                            // Retornar JSON com ambos formatos
-                            val resultJson = """{"hex":"$hexString","text":"$textString","block":$block}"""
-                            callback(Result.Success(resultJson))
-                        } else {
-                            callback(Result.Error(Exception("Bloco $block retornou vazio")))
+                        // Converter para String hexadecimal
+                        val hexString = byteArrayToHex(readBuffer)
+                        
+                        // Tentar converter para texto
+                        val textString = try {
+                            String(readBuffer, Charsets.UTF_8).trim { it <= ' ' || it == '\u0000' }
+                        } catch (e: Exception) {
+                            ""
                         }
+
+                        Log.d("MIFARE_READ_SUCCESS", "Bloco $block - Hex: $hexString, Text: $textString")
+                        
+                        // Retornar JSON com ambos formatos
+                        val resultJson = """{"hex":"$hexString","text":"$textString","block":$block}"""
+                        callback(Result.Success(resultJson))
 
                     } catch (e: Exception) {
                         try {
@@ -110,9 +104,6 @@ class MifareUsecase(
 
     /**
      * Escreve dados em um cartão Mifare
-     * @param data Dados a serem escritos (máximo 16 bytes)
-     * @param block Número do bloco (evite blocos de trailer: 3, 7, 11, 15, etc)
-     * @param timeout Timeout em segundos
      */
     fun writeMifareCard(
         data: String,
@@ -121,9 +112,9 @@ class MifareUsecase(
         callback: (Result<Boolean>) -> Unit
     ) {
         try {
-            // Validar se não é bloco de trailer (contém as chaves)
+            // Validar se não é bloco de trailer
             if (block % 4 == 3) {
-                callback(Result.Error(Exception("Bloco $block é um trailer block (contém chaves). Use blocos de dados: 1, 2, 4, 5, 6, etc.")))
+                callback(Result.Error(Exception("Bloco $block é um trailer block. Use blocos: 1, 2, 4, 5, 6, etc.")))
                 return
             }
 
@@ -139,21 +130,22 @@ class MifareUsecase(
                 override fun onSuccess() {
                     try {
                         // 1. Ativar o cartão
-                        val cardInfo = mifareProvider.activateCard()
-                        Log.d("MIFARE", "Cartão ativado: ${cardInfo?.contentToString()}")
+                        val cardInfo: ByteArray? = mifareProvider.activateCard()
+                        val cardInfoStr = cardInfo?.let { byteArrayToHex(it) } ?: "null"
+                        Log.d("MIFARE", "Cartão ativado: $cardInfoStr")
 
                         // 2. Calcular o setor
                         val sector = block / 4
 
                         // 3. Autenticar o setor
-                        val authResult = mifareProvider.authenticateSector(
+                        val authResult: Boolean = mifareProvider.authenticateSector(
                             sector.toByte(),
                             DEFAULT_KEY,
-                            0.toByte() // Key A
+                            MifareKeyType.TYPE_A
                         )
                         Log.d("MIFARE", "Autenticação setor $sector: $authResult")
 
-                        if (!authResult) {
+                        if (authResult == false) {
                             mifareProvider.powerOff()
                             callback(Result.Error(Exception("Falha na autenticação do setor $sector")))
                             return
@@ -164,19 +156,15 @@ class MifareUsecase(
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(sourceBytes, 0, dataBytes, 0, minOf(sourceBytes.size, 16))
 
-                        // 5. Escrever no bloco
-                        val writeResult = mifareProvider.writeBlock(block.toByte(), dataBytes)
-                        Log.d("MIFARE", "Escrita bloco $block: $writeResult")
+                        // 5. Escrever no bloco - writeBlock(sector, block, data)
+                        mifareProvider.writeBlock(sector.toByte(), block.toByte(), dataBytes)
+                        Log.d("MIFARE", "Escrita bloco $block concluída")
 
                         // 6. Desligar o cartão
                         mifareProvider.powerOff()
 
-                        if (writeResult) {
-                            Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito com sucesso")
-                            callback(Result.Success(true))
-                        } else {
-                            callback(Result.Error(Exception("Falha ao escrever no bloco $block")))
-                        }
+                        Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito com sucesso")
+                        callback(Result.Success(true))
 
                     } catch (e: Exception) {
                         try {
@@ -203,7 +191,7 @@ class MifareUsecase(
     }
 
     /**
-     * Lê o UID (identificador único) do cartão Mifare
+     * Lê o UID do cartão Mifare
      */
     fun readCardUID(callback: (Result<String>) -> Unit) {
         try {
@@ -212,12 +200,11 @@ class MifareUsecase(
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
                 override fun onSuccess() {
                     try {
-                        // activateCard() retorna o UID do cartão
-                        val cardUID = mifareProvider.activateCard()
+                        val cardUID: ByteArray? = mifareProvider.activateCard()
                         mifareProvider.powerOff()
 
-                        if (cardUID != null && cardUID.isNotEmpty()) {
-                            val uidHex = cardUID.joinToString("") { "%02X".format(it) }
+                        if (cardUID != null && cardUID.size > 0) {
+                            val uidHex = byteArrayToHex(cardUID)
                             Log.d("MIFARE_UID", "UID: $uidHex")
                             callback(Result.Success(uidHex))
                         } else {
@@ -240,5 +227,16 @@ class MifareUsecase(
         } catch (e: Exception) {
             callback(Result.Error(e))
         }
+    }
+
+    /**
+     * Converte ByteArray para String hexadecimal
+     */
+    private fun byteArrayToHex(bytes: ByteArray): String {
+        val sb = StringBuilder()
+        for (b in bytes) {
+            sb.append(String.format("%02X", b))
+        }
+        return sb.toString()
     }
 }

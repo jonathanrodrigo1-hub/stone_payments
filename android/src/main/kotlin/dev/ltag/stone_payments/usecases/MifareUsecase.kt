@@ -36,10 +36,13 @@ class MifareUsecase(
                         mifareProvider.activateCard()
                         Log.d("MIFARE", "Cartão ativado")
 
-                        // 2. Calcular o setor
+                        // 2. Calcular o setor e bloco relativo
                         val sector = block / 4
+                        val relativeBlock = block % 4  // Bloco relativo dentro do setor (0-3)
+                        
+                        Log.d("MIFARE", "Bloco solicitado: $block -> Setor: $sector, Bloco relativo: $relativeBlock")
 
-                        // 3. Autenticar o setor - ORDEM CORRETA: keyType, key, sector
+                        // 3. Autenticar o setor
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -51,7 +54,6 @@ class MifareUsecase(
                                 }
                             }
                             
-                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
                                 DEFAULT_KEY,
@@ -65,10 +67,11 @@ class MifareUsecase(
                             return
                         }
 
-                        // 4. Ler o bloco
+                        // 4. Ler o bloco usando bloco relativo (0-3)
                         val readBuffer = ByteArray(16)
-                        mifareProvider.readBlock(sector.toByte(), block.toByte(), readBuffer)
-                        Log.d("MIFARE", "Dados do bloco $block: ${byteArrayToHex(readBuffer)}")
+                        Log.d("MIFARE", "Tentando ler bloco relativo: $relativeBlock")
+                        mifareProvider.readBlock(relativeBlock.toByte(), readBuffer)
+                        Log.d("MIFARE", "Leitura OK! Dados: ${byteArrayToHex(readBuffer)}")
 
                         // 5. Desligar o cartão
                         mifareProvider.powerOff()
@@ -139,8 +142,11 @@ class MifareUsecase(
                         Log.d("MIFARE", "Cartão ativado")
 
                         val sector = block / 4
+                        val relativeBlock = block % 4
+                        
+                        Log.d("MIFARE", "Bloco solicitado: $block -> Setor: $sector, Bloco relativo: $relativeBlock")
 
-                        // Autenticar o setor - ORDEM CORRETA: keyType, key, sector
+                        // Autenticar o setor
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -152,7 +158,6 @@ class MifareUsecase(
                                 }
                             }
                             
-                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
                                 DEFAULT_KEY,
@@ -170,8 +175,10 @@ class MifareUsecase(
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(sourceBytes, 0, dataBytes, 0, minOf(sourceBytes.size, 16))
 
-                        mifareProvider.writeBlock(sector.toByte(), block.toByte(), dataBytes)
-                        Log.d("MIFARE", "Escrita bloco $block concluída")
+                        // Escrever usando bloco relativo
+                        Log.d("MIFARE", "Tentando escrever bloco relativo: $relativeBlock")
+                        mifareProvider.writeBlock(relativeBlock.toByte(), dataBytes)
+                        Log.d("MIFARE", "Escrita OK!")
 
                         mifareProvider.powerOff()
 
@@ -240,3 +247,17 @@ class MifareUsecase(
         return sb.toString()
     }
 }
+```
+
+**Mudanças principais:**
+
+1. **Usa apenas bloco relativo** (0-3) após autenticação
+2. **Mais logs** para debug
+3. **Remove try-catch duplo** para simplificar
+
+Agora compile, instale e teste novamente. Os logs devem mostrar algo como:
+```
+D  Bloco solicitado: 4 -> Setor: 1, Bloco relativo: 0
+D  Autenticação setor 1 OK
+D  Tentando ler bloco relativo: 0
+D  Leitura OK! Dados: XXXXXXXX...

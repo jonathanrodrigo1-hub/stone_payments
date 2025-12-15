@@ -3,7 +3,6 @@ package dev.ltag.stone_payments.usecases
 import android.util.Log
 import dev.ltag.stone_payments.Result
 import br.com.stone.posandroid.providers.PosMifareProvider
-import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
 
@@ -36,21 +35,20 @@ class MifareUsecase(
                         mifareProvider.activateCard()
                         Log.d("MIFARE", "Cartão ativado")
 
-                        // 2. Calcular o setor baseado no bloco
+                        // 2. Calcular o setor
                         val sector = block / 4
 
-                        // 3. Autenticar o setor
-                        // Assinatura provável: authenticateSector(keyType, sector, key)
+                        // 3. Autenticar o setor (Key A = 0x60)
                         try {
                             mifareProvider.authenticateSector(
-                                MifareKeyType.KEYTYPE_A,
                                 sector.toByte(),
-                                DEFAULT_KEY
+                                DEFAULT_KEY,
+                                0x60.toByte()  // 0x60 = Key A, 0x61 = Key B
                             )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
-                            mifareProvider.powerOff()
                             Log.e("MIFARE", "Falha autenticação: ${authEx.message}")
+                            mifareProvider.powerOff()
                             callback(Result.Error(Exception("Falha na autenticação do setor $sector: ${authEx.message}")))
                             return
                         }
@@ -79,9 +77,7 @@ class MifareUsecase(
                         callback(Result.Success(resultJson))
 
                     } catch (e: Exception) {
-                        try {
-                            mifareProvider.powerOff()
-                        } catch (ignored: Exception) {}
+                        try { mifareProvider.powerOff() } catch (ignored: Exception) {}
                         Log.e("MIFARE_READ_ERROR", "Erro: ${e.message}", e)
                         callback(Result.Error(e))
                     }
@@ -132,16 +128,17 @@ class MifareUsecase(
 
                         val sector = block / 4
 
+                        // Autenticar o setor (Key A = 0x60)
                         try {
                             mifareProvider.authenticateSector(
-                                MifareKeyType.KEYTYPE_A,
                                 sector.toByte(),
-                                DEFAULT_KEY
+                                DEFAULT_KEY,
+                                0x60.toByte()
                             )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
-                            mifareProvider.powerOff()
                             Log.e("MIFARE", "Falha autenticação: ${authEx.message}")
+                            mifareProvider.powerOff()
                             callback(Result.Error(Exception("Falha na autenticação do setor $sector: ${authEx.message}")))
                             return
                         }
@@ -159,9 +156,7 @@ class MifareUsecase(
                         callback(Result.Success(true))
 
                     } catch (e: Exception) {
-                        try {
-                            mifareProvider.powerOff()
-                        } catch (ignored: Exception) {}
+                        try { mifareProvider.powerOff() } catch (ignored: Exception) {}
                         Log.e("MIFARE_WRITE_ERROR", "Erro: ${e.message}", e)
                         callback(Result.Error(e))
                     }
@@ -183,7 +178,7 @@ class MifareUsecase(
     }
 
     /**
-     * Detecta cartão Mifare
+     * Detecta cartão Mifare e retorna info
      */
     fun readCardUID(callback: (Result<String>) -> Unit) {
         try {

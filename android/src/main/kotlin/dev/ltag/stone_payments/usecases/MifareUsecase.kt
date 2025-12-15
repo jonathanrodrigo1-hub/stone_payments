@@ -40,11 +40,11 @@ class MifareUsecase(
                         )
                         
                         // Autenticar o setor com Key A
-                        // authenticateSector(sector: Byte, key: ByteArray, keyType: MifareKeyType)
+                        // authenticateSector(keyType: MifareKeyType, sector: Byte, key: Byte)
                         mifareProvider.authenticateSector(
+                            MifareKeyType.TypeA,
                             sector.toByte(),
-                            defaultKey,
-                            MifareKeyType.TypeA
+                            defaultKey
                         )
 
                         // Criar buffer para receber os dados
@@ -137,9 +137,9 @@ class MifareUsecase(
                         
                         // Autenticar o setor com Key A
                         mifareProvider.authenticateSector(
+                            MifareKeyType.TypeA,
                             sector.toByte(),
-                            defaultKey,
-                            MifareKeyType.TypeA
+                            defaultKey
                         )
 
                         // Converter String para ByteArray de 16 bytes

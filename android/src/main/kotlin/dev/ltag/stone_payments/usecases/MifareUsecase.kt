@@ -39,7 +39,7 @@ class MifareUsecase(
                         // 2. Calcular o setor
                         val sector = block / 4
 
-                        // 3. Autenticar o setor - ORDEM CORRETA: keyType, key, sector
+                        // 3. Autenticar o setor
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -51,7 +51,6 @@ class MifareUsecase(
                                 }
                             }
                             
-                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
                                 DEFAULT_KEY,
@@ -65,9 +64,9 @@ class MifareUsecase(
                             return
                         }
 
-                        // 4. Ler o bloco
+                        // 4. Ler o bloco - passa apenas o bloco absoluto e o buffer
                         val readBuffer = ByteArray(16)
-                        mifareProvider.readBlock(sector.toByte(), block.toByte(), readBuffer)
+                        mifareProvider.readBlock(block.toByte(), readBuffer)
                         Log.d("MIFARE", "Dados do bloco $block: ${byteArrayToHex(readBuffer)}")
 
                         // 5. Desligar o cartão
@@ -140,7 +139,7 @@ class MifareUsecase(
 
                         val sector = block / 4
 
-                        // Autenticar o setor - ORDEM CORRETA: keyType, key, sector
+                        // Autenticar o setor
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -152,7 +151,6 @@ class MifareUsecase(
                                 }
                             }
                             
-                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
                                 DEFAULT_KEY,
@@ -170,7 +168,8 @@ class MifareUsecase(
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(sourceBytes, 0, dataBytes, 0, minOf(sourceBytes.size, 16))
 
-                        mifareProvider.writeBlock(sector.toByte(), block.toByte(), dataBytes)
+                        // Escrever o bloco - passa apenas o bloco absoluto e os dados
+                        mifareProvider.writeBlock(block.toByte(), dataBytes)
                         Log.d("MIFARE", "Escrita bloco $block concluída")
 
                         mifareProvider.powerOff()

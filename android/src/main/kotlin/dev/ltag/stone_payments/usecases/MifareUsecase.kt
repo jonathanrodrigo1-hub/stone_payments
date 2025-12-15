@@ -30,53 +30,83 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Calcular o setor a partir do bloco
-                        val sector = block / 4
-                        
-                        // Chave padrão Mifare (FFFFFFFFFFFF)
-                        val defaultKey = byteArrayOf(
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
-                        )
-                        
-                        // Autenticar o setor com Key A
-                        // authenticateSector(keyType: MifareKeyType, key: ByteArray, sector: Byte)
-                        mifareProvider.authenticateSector(
-                            MifareKeyType.TypeA,
-                            defaultKey,
-                            sector.toByte()
-                        )
-
                         // Criar buffer para receber os dados
                         val dataBytes = ByteArray(16)
                         
-                        // Ler o bloco
-                        val keyType: Byte = 0x60
-                        mifareProvider.readBlock(block.toByte(), keyType, dataBytes)
-
-                        // Converter para String
-                        val dataString = String(dataBytes, Charsets.UTF_8).trim()
+                        // TESTAR SEM AUTENTICAÇÃO PRIMEIRO
+                        // Ler o bloco diretamente
+                        val keyType: Byte = 0x60 // Key A
                         
-                        // Converter para HEX
-                        val hexString = StringBuilder()
-                        for (b in dataBytes) {
-                            hexString.append(String.format("%02X ", b))
+                        try {
+                            mifareProvider.readBlock(block.toByte(), keyType, dataBytes)
+                            
+                            // Converter para String
+                            val dataString = String(dataBytes, Charsets.UTF_8).trim()
+                            
+                            // Converter para HEX
+                            val hexString = StringBuilder()
+                            for (b in dataBytes) {
+                                hexString.append(String.format("%02X ", b))
+                            }
+
+                            mifareProvider.powerOff()
+
+                            Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido: $dataString")
+                            Log.d("MIFARE_READ_HEX", "HEX: $hexString")
+                            
+                            val resultMap = mutableMapOf<String, Any>(
+                                "success" to true,
+                                "block" to block,
+                                "data" to dataString,
+                                "dataHex" to hexString.toString().trim(),
+                                "message" to "Cartão Mifare lido com sucesso"
+                            )
+                            
+                            callback(Result.Success(resultMap))
+                            
+                        } catch (e: Exception) {
+                            // Se falhar sem autenticação, tentar COM autenticação
+                            Log.w("MIFARE_READ_RETRY", "Leitura direta falhou, tentando com autenticação", e)
+                            
+                            // Calcular o setor
+                            val sector = block / 4
+                            
+                            // Chave padrão Mifare (FFFFFFFFFFFF)
+                            val defaultKey = byteArrayOf(
+                                0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+                                0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                            )
+                            
+                            // Autenticar o setor
+                            mifareProvider.authenticateSector(
+                                MifareKeyType.TypeA,
+                                defaultKey,
+                                sector.toByte()
+                            )
+                            
+                            // Tentar ler novamente
+                            mifareProvider.readBlock(block.toByte(), keyType, dataBytes)
+                            
+                            val dataString = String(dataBytes, Charsets.UTF_8).trim()
+                            val hexString = StringBuilder()
+                            for (b in dataBytes) {
+                                hexString.append(String.format("%02X ", b))
+                            }
+
+                            mifareProvider.powerOff()
+
+                            Log.d("MIFARE_READ_SUCCESS_AUTH", "Bloco $block lido com autenticação")
+                            
+                            val resultMap = mutableMapOf<String, Any>(
+                                "success" to true,
+                                "block" to block,
+                                "data" to dataString,
+                                "dataHex" to hexString.toString().trim(),
+                                "message" to "Cartão Mifare lido com sucesso (com autenticação)"
+                            )
+                            
+                            callback(Result.Success(resultMap))
                         }
-
-                        mifareProvider.powerOff()
-
-                        Log.d("MIFARE_READ_SUCCESS", "Bloco $block lido: $dataString")
-                        Log.d("MIFARE_READ_HEX", "HEX: $hexString")
-                        
-                        val resultMap = mutableMapOf<String, Any>(
-                            "success" to true,
-                            "block" to block,
-                            "data" to dataString,
-                            "dataHex" to hexString.toString().trim(),
-                            "message" to "Cartão Mifare lido com sucesso"
-                        )
-                        
-                        callback(Result.Success(resultMap))
 
                     } catch (e: Exception) {
                         try {
@@ -84,7 +114,16 @@ class MifareUsecase(
                         } catch (ignored: Exception) {
                         }
                         Log.e("MIFARE_READ_ERROR", "Erro ao ler bloco $block", e)
-                        callback(Result.Error(e))
+                        
+                        val errorMessage = when {
+                            e.message?.contains("authentication", ignoreCase = true) == true -> 
+                                "Erro de autenticação. Verifique a chave do cartão."
+                            e.message?.contains("block", ignoreCase = true) == true -> 
+                                "Bloco inválido ou protegido. Use blocos 4-6, 8-10, etc."
+                            else -> "Erro ao ler cartão Mifare: ${e.message}"
+                        }
+                        
+                        callback(Result.Error(Exception(errorMessage)))
                     }
                 }
 
@@ -113,6 +152,17 @@ class MifareUsecase(
         callback: (Result<Map<String, Any>>) -> Unit
     ) {
         try {
+            // Validar o bloco
+            if (block % 4 == 3) {
+                callback(Result.Error(Exception("Não é possível escrever em blocos de trailer (3, 7, 11, 15, etc.)")))
+                return
+            }
+            
+            if (block == 0) {
+                callback(Result.Error(Exception("Não é possível escrever no bloco 0 (bloco de fabricante)")))
+                return
+            }
+            
             if (data.length > 16) {
                 callback(Result.Error(Exception("Data must be 16 bytes or less. Current: ${data.length}")))
                 return
@@ -126,22 +176,6 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Calcular o setor a partir do bloco
-                        val sector = block / 4
-                        
-                        // Chave padrão Mifare (FFFFFFFFFFFF)
-                        val defaultKey = byteArrayOf(
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
-                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
-                        )
-                        
-                        // Autenticar o setor com Key A
-                        mifareProvider.authenticateSector(
-                            MifareKeyType.TypeA,
-                            defaultKey,
-                            sector.toByte()
-                        )
-
                         // Converter String para ByteArray de 16 bytes
                         val dataBytes = ByteArray(16)
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
@@ -153,22 +187,56 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // Escrever no bloco
                         val keyType: Byte = 0x60
-                        mifareProvider.writeBlock(block.toByte(), keyType, dataBytes)
-
-                        mifareProvider.powerOff()
-
-                        Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito: $data")
                         
-                        val resultMap = mutableMapOf<String, Any>(
-                            "success" to true,
-                            "block" to block,
-                            "dataWritten" to data,
-                            "message" to "Dados escritos com sucesso no bloco $block"
-                        )
-                        
-                        callback(Result.Success(resultMap))
+                        try {
+                            // Tentar escrever diretamente
+                            mifareProvider.writeBlock(block.toByte(), keyType, dataBytes)
+                            
+                            mifareProvider.powerOff()
+
+                            Log.d("MIFARE_WRITE_SUCCESS", "Bloco $block escrito: $data")
+                            
+                            val resultMap = mutableMapOf<String, Any>(
+                                "success" to true,
+                                "block" to block,
+                                "dataWritten" to data,
+                                "message" to "Dados escritos com sucesso no bloco $block"
+                            )
+                            
+                            callback(Result.Success(resultMap))
+                            
+                        } catch (e: Exception) {
+                            // Se falhar, tentar com autenticação
+                            Log.w("MIFARE_WRITE_RETRY", "Escrita direta falhou, tentando com autenticação", e)
+                            
+                            val sector = block / 4
+                            val defaultKey = byteArrayOf(
+                                0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+                                0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                            )
+                            
+                            mifareProvider.authenticateSector(
+                                MifareKeyType.TypeA,
+                                defaultKey,
+                                sector.toByte()
+                            )
+                            
+                            mifareProvider.writeBlock(block.toByte(), keyType, dataBytes)
+                            
+                            mifareProvider.powerOff()
+
+                            Log.d("MIFARE_WRITE_SUCCESS_AUTH", "Bloco $block escrito com autenticação")
+                            
+                            val resultMap = mutableMapOf<String, Any>(
+                                "success" to true,
+                                "block" to block,
+                                "dataWritten" to data,
+                                "message" to "Dados escritos com sucesso no bloco $block (com autenticação)"
+                            )
+                            
+                            callback(Result.Success(resultMap))
+                        }
 
                     } catch (e: Exception) {
                         try {
@@ -176,7 +244,16 @@ class MifareUsecase(
                         } catch (ignored: Exception) {
                         }
                         Log.e("MIFARE_WRITE_ERROR", "Erro ao escrever bloco $block", e)
-                        callback(Result.Error(e))
+                        
+                        val errorMessage = when {
+                            e.message?.contains("authentication", ignoreCase = true) == true -> 
+                                "Erro de autenticação. Verifique a chave do cartão."
+                            e.message?.contains("block", ignoreCase = true) == true -> 
+                                "Bloco inválido ou protegido."
+                            else -> "Erro ao escrever no cartão Mifare: ${e.message}"
+                        }
+                        
+                        callback(Result.Error(Exception(errorMessage)))
                     }
                 }
 

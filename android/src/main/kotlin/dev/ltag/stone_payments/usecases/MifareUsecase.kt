@@ -38,9 +38,8 @@ class MifareUsecase(
 
                         // 2. Calcular o setor
                         val sector = block / 4
-                        val relativeBlock = block % 4  // Bloco relativo dentro do setor (0-3)
 
-                        // 3. Autenticar o setor
+                        // 3. Autenticar o setor - ORDEM CORRETA: keyType, key, sector
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -52,6 +51,7 @@ class MifareUsecase(
                                 }
                             }
                             
+                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
                                 DEFAULT_KEY,
@@ -65,18 +65,9 @@ class MifareUsecase(
                             return
                         }
 
-                        // 4. Ler o bloco - tenta com bloco relativo
+                        // 4. Ler o bloco
                         val readBuffer = ByteArray(16)
-                        try {
-                            Log.d("MIFARE", "Tentando ler - Setor: $sector, Bloco relativo: $relativeBlock, Bloco absoluto: $block")
-                            mifareProvider.readBlock(relativeBlock.toByte(), readBuffer)
-                            Log.d("MIFARE", "Leitura OK com bloco relativo")
-                        } catch (e1: Exception) {
-                            Log.e("MIFARE", "Falha com bloco relativo, tentando bloco absoluto: ${e1.message}")
-                            mifareProvider.readBlock(block.toByte(), readBuffer)
-                            Log.d("MIFARE", "Leitura OK com bloco absoluto")
-                        }
-                        
+                        mifareProvider.readBlock(sector.toByte(), block.toByte(), readBuffer)
                         Log.d("MIFARE", "Dados do bloco $block: ${byteArrayToHex(readBuffer)}")
 
                         // 5. Desligar o cartão
@@ -148,9 +139,8 @@ class MifareUsecase(
                         Log.d("MIFARE", "Cartão ativado")
 
                         val sector = block / 4
-                        val relativeBlock = block % 4
 
-                        // Autenticar o setor
+                        // Autenticar o setor - ORDEM CORRETA: keyType, key, sector
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -162,6 +152,7 @@ class MifareUsecase(
                                 }
                             }
                             
+                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
                                 DEFAULT_KEY,
@@ -179,16 +170,8 @@ class MifareUsecase(
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
                         System.arraycopy(sourceBytes, 0, dataBytes, 0, minOf(sourceBytes.size, 16))
 
-                        // Escrever o bloco - tenta com bloco relativo
-                        try {
-                            Log.d("MIFARE", "Tentando escrever - Setor: $sector, Bloco relativo: $relativeBlock, Bloco absoluto: $block")
-                            mifareProvider.writeBlock(relativeBlock.toByte(), dataBytes)
-                            Log.d("MIFARE", "Escrita OK com bloco relativo")
-                        } catch (e1: Exception) {
-                            Log.e("MIFARE", "Falha com bloco relativo, tentando bloco absoluto: ${e1.message}")
-                            mifareProvider.writeBlock(block.toByte(), dataBytes)
-                            Log.d("MIFARE", "Escrita OK com bloco absoluto")
-                        }
+                        mifareProvider.writeBlock(sector.toByte(), block.toByte(), dataBytes)
+                        Log.d("MIFARE", "Escrita bloco $block concluída")
 
                         mifareProvider.powerOff()
 

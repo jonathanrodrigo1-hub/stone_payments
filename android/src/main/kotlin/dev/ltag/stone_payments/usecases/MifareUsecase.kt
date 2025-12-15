@@ -29,13 +29,23 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
-                        // Criar buffer para receber os dados (16 bytes para Mifare Classic)
+                        // Calcular o setor a partir do bloco
+                        val sector = block / 4
+                        
+                        // Chave padrão Mifare (FFFFFFFFFFFF)
+                        val defaultKey = byteArrayOf(
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                        )
+                        
+                        // Autenticar o setor com Key A (0x60)
+                        val keyType: Byte = 0x60
+                        mifareProvider.authenticateSector(sector.toByte(), keyType, defaultKey)
+
+                        // Criar buffer para receber os dados
                         val dataBytes = ByteArray(16)
                         
-                        // readBlock(byte block, byte keyType, byte[] data)
-                        // keyType: 0x60 = Key A, 0x61 = Key B
-                        val keyType: Byte = 0x60 // Key A
-                        
+                        // Ler o bloco
                         mifareProvider.readBlock(block.toByte(), keyType, dataBytes)
 
                         // Converter para String
@@ -110,6 +120,19 @@ class MifareUsecase(
                         // Ativar o cartão
                         mifareProvider.activateCard()
 
+                        // Calcular o setor a partir do bloco
+                        val sector = block / 4
+                        
+                        // Chave padrão Mifare (FFFFFFFFFFFF)
+                        val defaultKey = byteArrayOf(
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte(),
+                            0xFF.toByte(), 0xFF.toByte(), 0xFF.toByte()
+                        )
+                        
+                        // Autenticar o setor com Key A (0x60)
+                        val keyType: Byte = 0x60
+                        mifareProvider.authenticateSector(sector.toByte(), keyType, defaultKey)
+
                         // Converter String para ByteArray de 16 bytes
                         val dataBytes = ByteArray(16)
                         val sourceBytes = data.toByteArray(Charsets.UTF_8)
@@ -121,9 +144,7 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // writeBlock(byte block, byte keyType, byte[] data)
-                        val keyType: Byte = 0x60 // Key A
-                        
+                        // Escrever no bloco
                         mifareProvider.writeBlock(block.toByte(), keyType, dataBytes)
 
                         mifareProvider.powerOff()

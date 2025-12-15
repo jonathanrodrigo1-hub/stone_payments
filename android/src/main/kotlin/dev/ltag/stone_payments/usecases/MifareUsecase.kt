@@ -32,8 +32,18 @@ class MifareUsecase(
                         // Criar buffer para receber os dados (16 bytes para Mifare Classic)
                         val dataBytes = ByteArray(16)
                         
-                        // Tentar com a ordem invertida: readBlock(data, block)
-                        mifareProvider.readBlock(dataBytes, block.toByte())
+                        // Possível assinatura: readBlock(byte, byte[], byte[])
+                        // Onde o terceiro parâmetro pode ser a chave de autenticação
+                        val keyBytes = ByteArray(6) // Chave padrão Mifare
+                        
+                        try {
+                            // Tentar com 3 parâmetros
+                            mifareProvider.readBlock(block.toByte(), dataBytes, keyBytes)
+                        } catch (e: Exception) {
+                            Log.e("MIFARE_READ_TRY", "Tentativa com 3 params falhou, tentando alternativa", e)
+                            // Se falhar, tentar sem o terceiro parâmetro
+                            throw e
+                        }
 
                         // Converter para String
                         val dataString = String(dataBytes, Charsets.UTF_8).trim()
@@ -118,8 +128,16 @@ class MifareUsecase(
                             minOf(sourceBytes.size, 16)
                         )
 
-                        // Tentar com a ordem invertida: writeBlock(data, block)
-                        mifareProvider.writeBlock(dataBytes, block.toByte())
+                        // Chave padrão Mifare
+                        val keyBytes = ByteArray(6)
+                        
+                        try {
+                            // Tentar com 3 parâmetros
+                            mifareProvider.writeBlock(block.toByte(), dataBytes, keyBytes)
+                        } catch (e: Exception) {
+                            Log.e("MIFARE_WRITE_TRY", "Tentativa com 3 params falhou", e)
+                            throw e
+                        }
 
                         mifareProvider.powerOff()
 

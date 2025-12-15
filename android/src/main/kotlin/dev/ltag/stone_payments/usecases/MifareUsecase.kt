@@ -6,6 +6,7 @@ import br.com.stone.posandroid.providers.PosMifareProvider
 import br.com.stone.posandroid.hal.api.mifare.MifareKeyType
 import dev.ltag.stone_payments.StonePaymentsPlugin
 import stone.application.interfaces.StoneCallbackInterface
+import stone.application.StoneStart
 
 class MifareUsecase(
     private val stonePayments: StonePaymentsPlugin,
@@ -27,6 +28,12 @@ class MifareUsecase(
         callback: (Result<String>) -> Unit
     ) {
         try {
+            // IMPORTANTE: Inicializar Stone antes de usar providers
+            if (!isStoneInitialized()) {
+                Log.d("MIFARE", "Inicializando Stone SDK...")
+                StoneStart.init(context)
+            }
+
             val mifareProvider = PosMifareProvider(context)
 
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
@@ -133,6 +140,12 @@ class MifareUsecase(
                 return
             }
 
+            // IMPORTANTE: Inicializar Stone antes de usar providers
+            if (!isStoneInitialized()) {
+                Log.d("MIFARE", "Inicializando Stone SDK...")
+                StoneStart.init(context)
+            }
+
             val mifareProvider = PosMifareProvider(context)
 
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
@@ -212,6 +225,12 @@ class MifareUsecase(
      */
     fun readCardUID(callback: (Result<String>) -> Unit) {
         try {
+            // IMPORTANTE: Inicializar Stone antes de usar providers
+            if (!isStoneInitialized()) {
+                Log.d("MIFARE", "Inicializando Stone SDK...")
+                StoneStart.init(context)
+            }
+
             val mifareProvider = PosMifareProvider(context)
 
             mifareProvider.connectionCallback = object : StoneCallbackInterface {
@@ -239,6 +258,16 @@ class MifareUsecase(
         }
     }
 
+    private fun isStoneInitialized(): Boolean {
+        return try {
+            // Tenta verificar se o Koin está inicializado
+            stone.di.SdkKoinStarter.isStarted()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun byteArrayToHex(bytes: ByteArray): String {
         val sb = StringBuilder()
         for (b in bytes) {
@@ -247,17 +276,3 @@ class MifareUsecase(
         return sb.toString()
     }
 }
-```
-
-**Mudanças principais:**
-
-1. **Usa apenas bloco relativo** (0-3) após autenticação
-2. **Mais logs** para debug
-3. **Remove try-catch duplo** para simplificar
-
-Agora compile, instale e teste novamente. Os logs devem mostrar algo como:
-```
-D  Bloco solicitado: 4 -> Setor: 1, Bloco relativo: 0
-D  Autenticação setor 1 OK
-D  Tentando ler bloco relativo: 0
-D  Leitura OK! Dados: XXXXXXXX...

@@ -39,7 +39,7 @@ class MifareUsecase(
                         // 2. Calcular o setor
                         val sector = block / 4
 
-                        // 3. Autenticar o setor - ORDEM CORRETA DOS PARÂMETROS
+                        // 3. Autenticar o setor - ORDEM CORRETA: keyType, key, sector
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -51,11 +51,11 @@ class MifareUsecase(
                                 }
                             }
                             
-                            // ORDEM CORRETA: keyType, sector, key
+                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
-                                sector.toByte(),
-                                DEFAULT_KEY
+                                DEFAULT_KEY,
+                                sector.toByte()
                             )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {
@@ -140,7 +140,7 @@ class MifareUsecase(
 
                         val sector = block / 4
 
-                        // Autenticar o setor - ORDEM CORRETA DOS PARÂMETROS
+                        // Autenticar o setor - ORDEM CORRETA: keyType, key, sector
                         try {
                             val keyType = try {
                                 MifareKeyType.valueOf("KEY_A")
@@ -152,11 +152,11 @@ class MifareUsecase(
                                 }
                             }
                             
-                            // ORDEM CORRETA: keyType, sector, key
+                            // ORDEM CORRETA: keyType, key (ByteArray), sector (Byte)
                             mifareProvider.authenticateSector(
                                 keyType,
-                                sector.toByte(),
-                                DEFAULT_KEY
+                                DEFAULT_KEY,
+                                sector.toByte()
                             )
                             Log.d("MIFARE", "Autenticação setor $sector OK")
                         } catch (authEx: Exception) {

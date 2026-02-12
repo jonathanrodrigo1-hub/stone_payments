@@ -24,6 +24,7 @@ import stone.database.transaction.TransactionObject
 import stone.database.transaction.TransactionDAO
 import stone.providers.CancellationProvider;
 import stone.utils.Stone
+import kotlin.math.roundToInt
 
 class PaymentUsecase(
     private val stonePayments: StonePaymentsPlugin,
@@ -48,8 +49,8 @@ class PaymentUsecase(
             transactionObject.typeOfTransaction = TypeOfTransactionEnum.values()[type]
 
             transactionObject.isCapture = true
-            val newValue: Int = (value * 100).toInt()
-            transactionObject.amount = newValue.toString()
+val newValue: Int = (value * 100).roundToInt()  // ← MUDOU AQUI
+transactionObject.amount = newValue.toString()
 
             provider = PosTransactionProvider(
                 context,
@@ -151,8 +152,8 @@ class PaymentUsecase(
             transactionObject.typeOfTransaction = TypeOfTransactionEnum.values()[type]
 
             transactionObject.isCapture = true
-            val newValue: Int = (value * 100).toInt()
-            transactionObject.amount = newValue.toString()
+val newValue: Int = (value * 100).roundToInt()  // ← MUDOU AQUI
+transactionObject.amount = newValue.toString()
 
             provider = PosTransactionProvider(
                 context,
@@ -384,4 +385,5 @@ class PaymentUsecase(
             channel.invokeMethod("pixQrCode", qrCode)
         }
     }
+
 }

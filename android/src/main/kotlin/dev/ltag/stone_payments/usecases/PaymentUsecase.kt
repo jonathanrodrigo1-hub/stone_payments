@@ -167,16 +167,13 @@ class PaymentUsecase(
 fun doAbort(callback: (Result<String>) -> Unit) {
     try {
         if (!::provider.isInitialized) {
-            Log.d("ABORT", "Provider not initialized yet, nothing to abort")
             callback(Result.Success("ABORTED"))
             return
         }
-
         provider.abortPayment()
         callback(Result.Success("ABORTED"))
     } catch (e: Exception) {
         Log.d("ERROR_ABORT", e.toString())
-        // Retorna sucesso mesmo com erro para não travar o fluxo Flutter
         callback(Result.Success("ABORT_ERROR: ${e.message}"))
     }
 }
@@ -250,4 +247,5 @@ fun doAbort(callback: (Result<String>) -> Unit) {
         }
     }
 }
+
 

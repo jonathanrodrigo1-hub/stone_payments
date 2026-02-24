@@ -238,14 +238,21 @@ transactionObject.amount = newValue.toString()
         }
     }
 
-    fun doAbort(callback: (Result<String>) -> Unit) {
-        try {
-            val transactionObject = stonePayments.transactionObject
 
-            if(provider == null){
+fun doAbort(callback: (Result<String>) -> Unit) {
+        try {
+            // lateinit var nunca é null — use isInitialized para verificar
+            if (!::provider.isInitialized) {
                 callback(Result.Error(Exception("PROVIDER NOT FOUND")))
                 return
             }
+            provider.abortPayment()
+            callback(Result.Success("ABORTED"))
+        } catch (e: Exception) {
+            Log.d("ERROR", e.toString())
+            callback(Result.Error(e))
+        }
+    }
 
             provider.abortPayment()
             callback(Result.Success("ABORTED"))
@@ -387,3 +394,4 @@ transactionObject.amount = newValue.toString()
     }
 
 }
+

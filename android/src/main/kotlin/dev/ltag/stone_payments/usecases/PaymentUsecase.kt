@@ -167,20 +167,30 @@ class PaymentUsecase(
 fun doAbort(callback: (Result<String>) -> Unit) {
     try {
         if (!::provider.isInitialized) {
-            Log.d("ABORT", "Provider not initialized yet, nothing to abort")
+            Log.d("ABORT", "Provider not initialized")
             callback(Result.Success("ABORTED"))
             return
         }
 
-        provider.abortPayment()
-        callback(Result.Success("ABORTED"))
+        // Executa abort em thread separada para não bloquear se o pinpad estiver ocupado
+        Thread {
+            try {
+                provider.abortPayment()
+                Handler(Looper.getMainLooper()).post {
+                    callback(Result.Success("ABORTED"))
+                }
+            } catch (e: Exception) {
+                Log.d("ABORT_THREAD", "Error: ${e.message}")
+                Handler(Looper.getMainLooper()).post {
+                    callback(Result.Success("ABORTED"))
+                }
+            }
+        }.start()
     } catch (e: Exception) {
         Log.d("ERROR_ABORT", e.toString())
-        // Retorna sucesso mesmo com erro para não travar o fluxo Flutter
-        callback(Result.Success("ABORT_ERROR: ${e.message}"))
+        callback(Result.Success("ABORTED"))
     }
 }
-
     fun doCancelWithITK(initiatorTransactionKey: String, print: Boolean?, callback: (Result<String>) -> Unit) {
         try {
             val transactionDAO = TransactionDAO(context)
@@ -250,6 +260,7 @@ fun doAbort(callback: (Result<String>) -> Unit) {
         }
     }
 }
+
 
 
 

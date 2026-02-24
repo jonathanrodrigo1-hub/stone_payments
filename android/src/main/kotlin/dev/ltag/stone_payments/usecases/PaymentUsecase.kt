@@ -41,95 +41,56 @@ class PaymentUsecase(
     ) {
         try {
             stonePayments.transactionObject = TransactionObject()
-
             val transactionObject = stonePayments.transactionObject
-
-            transactionObject.instalmentTransaction =
-                InstalmentTransactionEnum.getAt(installment - 1)
+            transactionObject.instalmentTransaction = InstalmentTransactionEnum.getAt(installment - 1)
             transactionObject.typeOfTransaction = TypeOfTransactionEnum.values()[type]
-
             transactionObject.isCapture = true
-val newValue: Int = (value * 100).roundToInt()  // ← MUDOU AQUI
-transactionObject.amount = newValue.toString()
+            val newValue: Int = (value * 100).roundToInt()
+            transactionObject.amount = newValue.toString()
 
-            provider = PosTransactionProvider(
-                context,
-                transactionObject,
-                Stone.getUserModel(0),
-            )
+            provider = PosTransactionProvider(context, transactionObject, Stone.getUserModel(0))
 
             provider.setConnectionCallback(object : StoneActionCallback {
-
                 override fun onSuccess() {
-
                     when (val status = provider.transactionStatus) {
                         TransactionStatusEnum.APPROVED -> {
-
-
                             Log.d("SUCCESS", transactionObject.toString())
                             if (print == true) {
-                                val posPrintReceiptProvider =
-                                    PosPrintReceiptProvider(
-                                        context, transactionObject,
-                                        ReceiptType.MERCHANT,
-                                    )
-
-                                posPrintReceiptProvider.connectionCallback = object :
-                                    StoneCallbackInterface {
-
-                                    override fun onSuccess() {
-
-                                        Log.d("SUCCESS", transactionObject.toString())
-                                    }
-
-                                    override fun onError() {
-                                        Log.d("ERROR", transactionObject.toString())
-
-                                    }
+                                val posPrintReceiptProvider = PosPrintReceiptProvider(
+                                    context, transactionObject, ReceiptType.MERCHANT,
+                                )
+                                posPrintReceiptProvider.connectionCallback = object : StoneCallbackInterface {
+                                    override fun onSuccess() { Log.d("SUCCESS", transactionObject.toString()) }
+                                    override fun onError() { Log.d("ERROR", transactionObject.toString()) }
                                 }
-
                                 posPrintReceiptProvider.execute()
-
                             }
                             sendAMessage("APPROVED")
-
                             callback(Result.Success(true))
                         }
                         TransactionStatusEnum.DECLINED -> {
-                            val message = provider.messageFromAuthorize
-                            sendAMessage(message ?: "DECLINED")
+                            sendAMessage(provider.messageFromAuthorize ?: "DECLINED")
                             callback(Result.Success(false))
                         }
                         TransactionStatusEnum.REJECTED -> {
-                            val message = provider.messageFromAuthorize
-                            sendAMessage(message ?: "REJECTED")
+                            sendAMessage(provider.messageFromAuthorize ?: "REJECTED")
                             callback(Result.Success(false))
                         }
                         else -> {
-                            val message = provider.messageFromAuthorize
-                            sendAMessage(message ?: status.name)
+                            sendAMessage(provider.messageFromAuthorize ?: status.name)
                         }
                     }
-
                 }
-
                 override fun onError() {
-
                     Log.d("RESULT", "ERROR")
-
                     sendAMessage(provider.transactionStatus?.name ?: "ERROR")
-
                     callback(Result.Error(Exception("ERROR")))
                 }
-
                 override fun onStatusChanged(p0: Action?) {
                     sendAMessage(p0?.name!!)
                 }
             })
-
             provider.execute()
-
-
         } catch (e: Exception) {
             Log.d("ERROR", e.toString())
             callback(Result.Error(e))
@@ -145,82 +106,49 @@ transactionObject.amount = newValue.toString()
     ) {
         try {
             stonePayments.transactionObject = TransactionObject()
-
             val transactionObject = stonePayments.transactionObject
-
             transactionObject.instalmentTransaction = InstalmentTransactionEnum.getAt(installment - 1)
             transactionObject.typeOfTransaction = TypeOfTransactionEnum.values()[type]
-
             transactionObject.isCapture = true
-val newValue: Int = (value * 100).roundToInt()  // ← MUDOU AQUI
-transactionObject.amount = newValue.toString()
+            val newValue: Int = (value * 100).roundToInt()
+            transactionObject.amount = newValue.toString()
 
-            provider = PosTransactionProvider(
-                context,
-                transactionObject,
-                Stone.getUserModel(0),
-            )
+            provider = PosTransactionProvider(context, transactionObject, Stone.getUserModel(0))
 
             provider.setConnectionCallback(object : StoneActionCallback {
-
                 override fun onSuccess() {
                     when (val status = provider.transactionStatus) {
                         TransactionStatusEnum.APPROVED -> {
                             if (print == true) {
-                                val posPrintReceiptProvider =
-                                    PosPrintReceiptProvider(
-                                        context, transactionObject,
-                                        ReceiptType.MERCHANT,
-                                    )
-
-                                posPrintReceiptProvider.connectionCallback = object :
-                                    StoneCallbackInterface {
-
-                                    override fun onSuccess() {
-
-                                        Log.d("SUCCESS", transactionObject.toString())
-                                    }
-
-                                    override fun onError() {
-                                        Log.d("ERROR", transactionObject.toString())
-
-                                    }
+                                val posPrintReceiptProvider = PosPrintReceiptProvider(
+                                    context, transactionObject, ReceiptType.MERCHANT,
+                                )
+                                posPrintReceiptProvider.connectionCallback = object : StoneCallbackInterface {
+                                    override fun onSuccess() { Log.d("SUCCESS", transactionObject.toString()) }
+                                    override fun onError() { Log.d("ERROR", transactionObject.toString()) }
                                 }
-
                                 posPrintReceiptProvider.execute()
-
                             }
                             sendAMessage("APPROVED")
                         }
                         TransactionStatusEnum.DECLINED -> {
-                            val message = provider.messageFromAuthorize
-                            sendAMessage(message ?: "DECLINED")
+                            sendAMessage(provider.messageFromAuthorize ?: "DECLINED")
                         }
                         TransactionStatusEnum.REJECTED -> {
-                            val message = provider.messageFromAuthorize
-                            sendAMessage(message ?: "REJECTED")
+                            sendAMessage(provider.messageFromAuthorize ?: "REJECTED")
                         }
                         else -> {
-                            val message = provider.messageFromAuthorize
-                            sendAMessage(message ?: status.name)
+                            sendAMessage(provider.messageFromAuthorize ?: status.name)
                         }
                     }
-
-                    val serializableTransaction = SerializableTransactionObject.from(transactionObject)
-
-                    val jsonString = Gson().toJson(serializableTransaction)
+                    val jsonString = Gson().toJson(SerializableTransactionObject.from(transactionObject))
                     callback(Result.Success(jsonString))
                 }
-
                 override fun onError() {
-
                     Log.d("RESULT", "ERROR")
-
                     sendAMessage(provider.transactionStatus?.name ?: "ERROR")
-
                     callback(Result.Error(Exception("ERROR")))
                 }
-
                 override fun onStatusChanged(action: Action?) {
                     if (action == Action.TRANSACTION_WAITING_QRCODE_SCAN) {
                         sendQrCode(Helper().convertBitmapToString(transactionObject.qrCode))
@@ -228,20 +156,16 @@ transactionObject.amount = newValue.toString()
                     sendAMessage(action?.name!!)
                 }
             })
-
             provider.execute()
-
-
         } catch (e: Exception) {
             Log.d("ERROR", e.toString())
             callback(Result.Error(e))
         }
     }
 
-
-fun doAbort(callback: (Result<String>) -> Unit) {
+    // ✅ CORRIGIDO: lateinit var nunca é null — usar isInitialized
+    fun doAbort(callback: (Result<String>) -> Unit) {
         try {
-            // lateinit var nunca é null — use isInitialized para verificar
             if (!::provider.isInitialized) {
                 callback(Result.Error(Exception("PROVIDER NOT FOUND")))
                 return
@@ -254,144 +178,72 @@ fun doAbort(callback: (Result<String>) -> Unit) {
         }
     }
 
-            provider.abortPayment()
-            callback(Result.Success("ABORTED"))
+    fun doCancelWithITK(initiatorTransactionKey: String, print: Boolean?, callback: (Result<String>) -> Unit) {
+        try {
+            val transactionDAO = TransactionDAO(context)
+            val transactionObject = transactionDAO.findTransactionWithInitiatorTransactionKey(initiatorTransactionKey)
+            if (transactionObject == null) {
+                callback(Result.Error(Exception("TRANSACTION NOT FOUND")))
+                return
+            }
+            return cancel(transactionObject, print, callback)
         } catch (e: Exception) {
             Log.d("ERROR", e.toString())
             callback(Result.Error(e))
         }
     }
 
-    fun doCancelWithITK(initiatorTransactionKey: String, print: Boolean?, callback: (Result<String>) -> Unit) {
-        try {
-            val transactionDAO = TransactionDAO(context)
-            val transactionObject = transactionDAO.findTransactionWithInitiatorTransactionKey(initiatorTransactionKey)
-
-            if (transactionObject == null) {
-                callback(Result.Error(Exception("TRANSACTION NOT FOUND")))
-                return
-            }
-
-            return cancel(transactionObject, print, callback)
-
-        } catch (e: Exception) {
-            Log.d("ERROR", e.toString())
-            callback(Result.Error(e));
-        }
-    }
-
-    // fun doCancelWithATK(acquirerTransactionKey: String, print: Boolean?, callback: (Result<String>) -> Unit) {
-    //     try {
-    //         val transactionDAO = TransactionDAO(context)
-    //         val transactionObject = transactionDAO.findTransactionWithATK(acquirerTransactionKey)
-
-    //         if (transactionObject == null) {
-    //             callback(Result.Error(Exception("TRANSACTION NOT FOUND")))
-    //             return
-    //         }
-
-    //         return cancel(transactionObject, print, callback)
-
-    //     } catch (e: Exception) {
-    //         Log.d("ERROR", e.toString())
-    //         callback(Result.Error(e));
-    //     }
-    // }
-
     fun doCancelWithAuthorizationCode(authorizationCode: String, print: Boolean?, callback: (Result<String>) -> Unit) {
         try {
             val transactionDAO = TransactionDAO(context)
             val transactionObject = transactionDAO.findTransactionWithAuthorizationCode(authorizationCode)
-
             if (transactionObject == null) {
                 callback(Result.Error(Exception("TRANSACTION NOT FOUND")))
                 return
             }
-
             return cancel(transactionObject, print, callback)
-
         } catch (e: Exception) {
             Log.d("ERROR", e.toString())
-            callback(Result.Error(e));
+            callback(Result.Error(e))
         }
     }
 
-    private fun cancel(transactionObject: TransactionObject, print: Boolean?, callback: (Result<String>) -> Unit,) {
-        if(transactionObject == null) {
-            callback(Result.Error(Exception("NOT FOUND")))
-            return
-        }
-
-        val provider = CancellationProvider(
-            context,
-            transactionObject,
-        )
-
+    private fun cancel(transactionObject: TransactionObject, print: Boolean?, callback: (Result<String>) -> Unit) {
+        val provider = CancellationProvider(context, transactionObject)
         provider.setConnectionCallback(object : StoneCallbackInterface {
-
             override fun onSuccess() {
-                if(print == true) {
-                    val posPrintReceiptProvider =
-                        PosPrintReceiptProvider(
-                            context, transactionObject,
-                            ReceiptType.MERCHANT,
-                        );
-
-                    posPrintReceiptProvider.connectionCallback = object :
-                        StoneCallbackInterface {
-
-                        override fun onSuccess() {
-
-                            Log.d("SUCCESS", transactionObject.toString())
-                            
-                        }
-
-                        override fun onError() {
-                            Log.d("ERRORPRINT", transactionObject.toString())
-
-                        }
+                if (print == true) {
+                    val posPrintReceiptProvider = PosPrintReceiptProvider(
+                        context, transactionObject, ReceiptType.MERCHANT,
+                    )
+                    posPrintReceiptProvider.connectionCallback = object : StoneCallbackInterface {
+                        override fun onSuccess() { Log.d("SUCCESS", transactionObject.toString()) }
+                        override fun onError() { Log.d("ERRORPRINT", transactionObject.toString()) }
                     }
-
                     posPrintReceiptProvider.execute()
                 }
-
-                val serializableTransaction = SerializableTransactionObject.from(transactionObject)
-
-                val jsonString = Gson().toJson(serializableTransaction)
+                val jsonString = Gson().toJson(SerializableTransactionObject.from(transactionObject))
                 callback(Result.Success(jsonString))
-
             }
-
             override fun onError() {
-
                 Log.d("RESULT", "ERROR")
-
-                callback(Result.Error(Exception("ERROR")));
+                callback(Result.Error(Exception("ERROR")))
             }
         })
-
         provider.execute()
     }
 
     private fun sendAMessage(message: String) {
         Handler(Looper.getMainLooper()).post {
-            val channel = MethodChannel(
-                StonePaymentsPlugin.flutterBinaryMessenger!!,
-                "stone_payments",
-            )
-            channel.invokeMethod("message", message)
+            MethodChannel(StonePaymentsPlugin.flutterBinaryMessenger!!, "stone_payments")
+                .invokeMethod("message", message)
         }
     }
 
     private fun sendQrCode(qrCode: String) {
         Handler(Looper.getMainLooper()).post {
-            val channel = MethodChannel(
-                StonePaymentsPlugin.flutterBinaryMessenger!!,
-                "stone_payments",
-            )
-            channel.invokeMethod("pixQrCode", qrCode)
+            MethodChannel(StonePaymentsPlugin.flutterBinaryMessenger!!, "stone_payments")
+                .invokeMethod("pixQrCode", qrCode)
         }
     }
-
 }
-
